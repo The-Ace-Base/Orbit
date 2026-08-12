@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f7f7" />
+  <title>Orbit – Sign in</title>
+  <link rel="stylesheet" href="./root.css" />
+</head>
+<body>
+  <main id="app">
+    <section id="login-view" class="login-view">
+      <div class="login-card">
+        <h1>Orbit</h1>
+        <p>Private Matrix messaging.</p>
+        <form id="login-form" autocomplete="on">
+          <label>
+            <span>Homeserver</span>
+            <input id="login-homeserver" type="url" value="https://matrix.org" required />
+          </label>
+          <label>
+            <span>Matrix ID</span>
+            <input id="login-user" type="text" autocomplete="username" placeholder="@username:matrix.org" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input id="login-password" type="password" autocomplete="current-password" required />
+          </label>
+          <p id="login-error" class="error hidden"></p>
+          <button id="login-button" class="btn primary" type="submit">Sign in</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script src="./index.js" defer></script>
+</body>
+</html>
