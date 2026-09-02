@@ -12,7 +12,9 @@
     <section id="main-view">
       <aside id="sidebar">
         <header class="sidebar-header">
-          <button id="profile-btn" class="icon-btn" type="button" aria-label="Profile">◯</button>
+          <button id="profile-btn" class="icon-btn" type="button" aria-label="Profile">
+            <img id="profile-avatar" class="avatar" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:none" />
+          </button>
           <div class="sidebar-title"><strong>Orbit</strong></div>
           <button id="new-dm-btn" class="icon-btn" type="button" aria-label="New direct message">+</button>
           <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode">◐</button>
@@ -45,6 +47,7 @@
           <div id="typing-indicator" class="typing hidden"></div>
 
           <form id="composer" class="composer">
+            <button id="emoji-btn" class="icon-btn" type="button" aria-label="Emoji picker">🙂</button>
             <input id="message-input" type="text" placeholder="Message" autocomplete="off" maxlength="10000" />
             <button class="btn primary" type="submit" aria-label="Send message">Send</button>
           </form>
