@@ -1,24 +1,22 @@
 const CACHE_NAME = 'orbit-v2';
 
-const APP_SHELL = [
+const STATIC_ASSETS = [
   './',
   './index.html',
   './chat.html',
-  './index.js',
-  './chat.js',
-  './matrix.js',
-  './unicode.js',
-  './root.css'
+  './root.css',
+  './icon.png'
 ];
 
 self.addEventListener(
   'install',
-  (event) => {
+  event => {
     event.waitUntil(
-      caches
-        .open(CACHE_NAME)
-        .then((cache) =>
-          cache.addAll(APP_SHELL)
+      caches.open(CACHE_NAME)
+        .then(cache =>
+          cache.addAll(
+            STATIC_ASSETS
+          )
         )
         .then(() =>
           self.skipWaiting()
@@ -29,18 +27,17 @@ self.addEventListener(
 
 self.addEventListener(
   'activate',
-  (event) => {
+  event => {
     event.waitUntil(
-      caches
-        .keys()
-        .then((keys) =>
+      caches.keys()
+        .then(keys =>
           Promise.all(
             keys
               .filter(
-                (key) =>
+                key =>
                   key !== CACHE_NAME
               )
-              .map((key) =>
+              .map(key =>
                 caches.delete(key)
               )
           )
@@ -54,50 +51,45 @@ self.addEventListener(
 
 self.addEventListener(
   'fetch',
-  (event) => {
+  event => {
     const request =
       event.request;
 
     if (
-      request.method !== 'GET' ||
-      !request.url.startsWith(
-        self.location.origin
-      )
+      request.method !== 'GET'
+    ) {
+      return;
+    }
+
+    const url =
+      new URL(request.url);
+
+    if (
+      url.origin !==
+      self.location.origin
     ) {
       return;
     }
 
     event.respondWith(
-      caches.match(request)
-        .then((cached) => {
-          if (cached) {
-            return cached;
-          }
+      fetch(request)
+        .then(response => {
+          const copy =
+            response.clone();
 
-          return fetch(request)
-            .then((response) => {
-              if (
-                !response ||
-                response.status !== 200
-              ) {
-                return response;
-              }
+          caches.open(CACHE_NAME)
+            .then(cache =>
+              cache.put(
+                request,
+                copy
+              )
+            );
 
-              const clone =
-                response.clone();
-
-              caches.open(
-                CACHE_NAME
-              ).then((cache) => {
-                cache.put(
-                  request,
-                  clone
-                );
-              });
-
-              return response;
-            });
+          return response;
         })
+        .catch(() =>
+          caches.match(request)
+        )
     );
   }
 );

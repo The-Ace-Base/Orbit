@@ -1,67 +1,89 @@
-import * as Matrix from './matrix.js';
+import {
+  getClient,
+  initializeMatrix,
+  start,
+  stop,
+  getRooms,
+  getRoomName,
+  getMemberName,
+  getRoomEvents,
+  getUserId,
+  getDisplayName,
+  getHomeserver,
+  sendText,
+  sendTyping,
+  markRead,
+  createDirectMessage,
+  searchUsers,
+  setDisplayName,
+  logout,
+  mediaUrl,
+  sendFile,
+  onMatrixEvent,
+  isCryptoReady
+} from './matrix.js';
 
 import {
-  init as initUnicode,
-  getCategories,
-  getCategoryEmoji,
-  getRecentEmoji,
+  loadEmoji,
+  getGroups,
+  getGroupIcon,
   searchEmoji,
-  useEmoji,
-  insertAtCursor,
-  getMetadata
+  getRecentEmoji,
+  rememberEmoji
 } from './unicode.js';
 
 const THEME_KEY = 'orbit-theme';
 
-const $ = (selector) =>
+const session = (() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem('orbit.session') || 'null'
+    );
+  } catch {
+    return null;
+  }
+})();
+
+if (!session) {
+  window.location.replace('./index.html');
+  throw new Error('No Orbit session.');
+}
+
+const $ = selector =>
   document.querySelector(selector);
-
-const $$ = (selector) =>
-  [...document.querySelectorAll(selector)];
-
-let selectedRoomId = null;
-let replyEvent = null;
-let roomFilter = '';
-let typingTimer = null;
-let lastReadEventId = null;
-
-const roomCache = new Map();
-
-/* ------------------------------------------------------------------
-   DOM
------------------------------------------------------------------- */
 
 const roomList = $('#room-list');
 const roomSearch = $('#room-search');
-const sidebarUser = $('#sidebar-user');
-const connectionStatus = $('#connection-status');
+const roomCount = $('#room-count');
 
+const messageList = $('#message-list');
 const emptyState = $('#empty-state');
 const chatView = $('#chat-view');
-const messageList = $('#message-list');
+
 const chatName = $('#chat-name');
 const chatStatus = $('#chat-status');
+
 const chatAvatar = $('#chat-avatar');
 const chatAvatarFallback = $('#chat-avatar-fallback');
+
+const sidebarUser = $('#sidebar-user');
+const connectionStatus = $('#connection-status');
 
 const composer = $('#composer');
 const messageInput = $('#message-input');
 const sendButton = $('#send-button');
+
 const typingIndicator = $('#typing-indicator');
 
 const emojiButton = $('#emoji-button');
 const emojiPicker = $('#emoji-picker');
 const emojiSearch = $('#emoji-search');
-const emojiCategories = $('#emoji-categories');
 const emojiGrid = $('#emoji-grid');
+const emojiCategories = $('#emoji-categories');
+const emojiTone = $('#emoji-tone');
 
 const fileInput = $('#file-input');
 const attachButton = $('#attach-button');
-
-const replyPreview = $('#reply-preview');
-const replyAuthor = $('#reply-author');
-const replyBody = $('#reply-body');
-const cancelReply = $('#cancel-reply');
 
 const dmModal = $('#dm-modal');
 const dmForm = $('#dm-form');
@@ -74,47 +96,54 @@ const profileForm = $('#profile-form');
 const profileName = $('#profile-name');
 const profileError = $('#profile-error');
 
-/* ------------------------------------------------------------------
-   THEME
------------------------------------------------------------------- */
+const profileAvatar = $('#profile-avatar');
+const profileLargeAvatar = $('#profile-large-avatar');
+const profileUserId = $('#profile-user-id');
 
-function applyTheme() {
-  const theme = localStorage.getItem(THEME_KEY);
+const toast = $('#toast');
 
-  if (
-    theme === 'light' ||
-    theme === 'dark'
-  ) {
-    document.documentElement.dataset.theme = theme;
+let activeRoomId = null;
+let roomFilter = '';
+let typingTimer = null;
+let isSending = false;
+
+let currentEmojiGroup = '';
+let emojiToneIndex = 0;
+
+const roomState = new Map();
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+
+  localStorage.setItem(
+    THEME_KEY,
+    theme
+  );
+
+  document.querySelectorAll(
+    '#theme-toggle i, #auth-theme-toggle i'
+  ).forEach(icon => {
+    icon.className =
+      theme === 'dark'
+        ? 'hgi-stroke hgi-sun-03'
+        : 'hgi-stroke hgi-moon-02';
+  });
+}
+
+function initialTheme() {
+  const saved =
+    localStorage.getItem(THEME_KEY);
+
+  if (saved === 'dark' || saved === 'light') {
+    return saved;
   }
+
+  return window.matchMedia(
+    '(prefers-color-scheme: dark)'
+  ).matches
+    ? 'dark'
+    : 'light';
 }
-
-function toggleTheme() {
-  const current =
-    document.documentElement.dataset.theme ||
-    (
-      matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
-    );
-
-  const next =
-    current === 'dark'
-      ? 'light'
-      : 'dark';
-
-  document.documentElement.dataset.theme = next;
-  localStorage.setItem(THEME_KEY, next);
-}
-
-$('#theme-toggle').addEventListener(
-  'click',
-  toggleTheme
-);
-
-/* ------------------------------------------------------------------
-   UTILITIES
------------------------------------------------------------------- */
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -125,51 +154,8 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function formatTime(timestamp) {
-  const date = new Date(timestamp);
-
-  return new Intl.DateTimeFormat(
-    undefined,
-    {
-      hour: 'numeric',
-      minute: '2-digit'
-    }
-  ).format(date);
-}
-
-function formatDay(timestamp) {
-  const date = new Date(timestamp);
-
-  return new Intl.DateTimeFormat(
-    undefined,
-    {
-      day: 'numeric',
-      month: 'short',
-      year:
-        date.getFullYear() !==
-        new Date().getFullYear()
-          ? 'numeric'
-          : undefined
-    }
-  ).format(date);
-}
-
-function formatRelativeDate(timestamp) {
-  const now = new Date();
-  const date = new Date(timestamp);
-
-  const sameDay =
-    now.toDateString() === date.toDateString();
-
-  if (sameDay) {
-    return formatTime(timestamp);
-  }
-
-  return formatDay(timestamp);
-}
-
-function linkify(text) {
-  const escaped = escapeHtml(text);
+function linkify(value) {
+  const escaped = escapeHtml(value);
 
   return escaped.replace(
     /(https?:\/\/[^\s<]+)/g,
@@ -177,261 +163,247 @@ function linkify(text) {
   );
 }
 
-function debounce(
-  callback,
-  delay = 250
-) {
-  let timer;
+function formatTime(timestamp) {
+  if (!timestamp) return '';
 
-  return (...args) => {
-    clearTimeout(timer);
-
-    timer = setTimeout(
-      () => callback(...args),
-      delay
-    );
-  };
-}
-
-function roomName(room) {
-  return Matrix.getRoomName(room);
-}
-
-function getMemberName(
-  room,
-  userId
-) {
-  const member = room?.getMember?.(userId);
-
-  return (
-    member?.name ||
-    member?.rawDisplayName ||
-    userId
-  );
-}
-
-function getAvatarUrl(room) {
-  const avatar = room?.getAvatarUrl?.(
-    Matrix.getHomeserver(),
-    96,
-    96,
-    'crop'
-  );
-
-  return avatar || '';
-}
-
-/* ------------------------------------------------------------------
-   CONNECTION
------------------------------------------------------------------- */
-
-function setConnectionStatus(
-  text,
-  state = ''
-) {
-  connectionStatus.textContent = text;
-  connectionStatus.dataset.state = state;
-}
-
-Matrix.subscribe(
-  'sync',
-  (state) => {
-    if (
-      state === 'PREPARED' ||
-      state === 'SYNCING'
-    ) {
-      setConnectionStatus(
-        state === 'PREPARED'
-          ? 'Connected'
-          : 'Syncing',
-        'connected'
-      );
+  return new Intl.DateTimeFormat(
+    undefined,
+    {
+      hour: 'numeric',
+      minute: '2-digit'
     }
+  ).format(timestamp);
+}
 
-    if (state === 'RECONNECTING') {
-      setConnectionStatus(
-        'Reconnecting',
-        'warning'
-      );
-    }
+function formatRoomTime(timestamp) {
+  if (!timestamp) return '';
 
-    if (state === 'ERROR') {
-      setConnectionStatus(
-        'Connection error',
-        'error'
-      );
-    }
+  const date = new Date(timestamp);
+  const now = new Date();
 
-    if (state === 'STOPPED') {
-      setConnectionStatus(
-        'Disconnected',
-        'error'
-      );
-    }
-
-    renderRooms();
+  if (
+    date.toDateString() ===
+    now.toDateString()
+  ) {
+    return new Intl.DateTimeFormat(
+      undefined,
+      {
+        hour: 'numeric',
+        minute: '2-digit'
+      }
+    ).format(date);
   }
-);
 
-Matrix.subscribe(
-  'sync.error',
-  (error) => {
-    console.error(error);
+  return new Intl.DateTimeFormat(
+    undefined,
+    {
+      month: 'short',
+      day: 'numeric'
+    }
+  ).format(date);
+}
 
-    setConnectionStatus(
-      'Connection error',
-      'error'
-    );
-  }
-);
+function initials(name) {
+  const parts =
+    String(name || 'O')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2);
 
-/* ------------------------------------------------------------------
-   ROOMS
------------------------------------------------------------------- */
+  return parts
+    .map(part => part[0])
+    .join('')
+    .toUpperCase();
+}
 
-function getRooms() {
-  return Matrix
-    .getRooms()
-    .filter((room) => {
-      const membership =
-        room.getMyMembership?.();
+function roomPreview(room) {
+  const events = getRoomEvents(room);
+
+  const last = [...events]
+    .reverse()
+    .find(event => {
+      const type = event.getType();
 
       return (
-        membership === 'join' ||
-        membership === 'invite'
+        type === 'm.room.message' ||
+        type === 'm.room.encrypted'
       );
     });
-}
 
-function getRoomPreview(room) {
-  const events = Matrix.getTimeline(
-    room.roomId,
-    1
-  );
-
-  const event = events.at(-1);
-
-  if (!event) {
+  if (!last) {
     return 'No messages yet';
   }
 
+  if (
+    last.getType() ===
+    'm.room.encrypted'
+  ) {
+    return 'Encrypted message';
+  }
+
   const content =
-    Matrix.getMessageContent(event);
+    last.getContent();
 
-  if (content.msgtype === 'm.image') {
-    return '📷 Image';
+  if (
+    content.msgtype ===
+    'm.image'
+  ) {
+    return 'Photo';
   }
 
-  if (content.msgtype === 'm.video') {
-    return '🎥 Video';
+  if (
+    content.msgtype ===
+    'm.file'
+  ) {
+    return 'File';
   }
 
-  if (content.msgtype === 'm.audio') {
-    return '🎵 Audio';
-  }
-
-  if (content.msgtype === 'm.file') {
-    return `📎 ${content.body || 'File'}`;
-  }
-
-  return content.body || 'Encrypted message';
-}
-
-function getRoomTimestamp(room) {
-  const events = Matrix.getTimeline(
-    room.roomId,
-    1
-  );
-
-  return events.at(-1)?.getTs?.() || 0;
-}
-
-function sortRooms(rooms) {
-  return [...rooms].sort(
-    (a, b) =>
-      getRoomTimestamp(b) -
-      getRoomTimestamp(a)
+  return (
+    content.body ||
+    'Message'
   );
 }
 
-function renderRooms() {
-  const rooms = sortRooms(getRooms());
+function setConnection(
+  state,
+  text
+) {
+  connectionStatus.dataset.state =
+    state;
 
-  const filtered = rooms.filter((room) => {
-    if (!roomFilter) {
-      return true;
-    }
+  connectionStatus.textContent =
+    text;
+}
 
-    return roomName(room)
-      .toLowerCase()
-      .includes(roomFilter.toLowerCase());
-  });
+function toastMessage(message) {
+  toast.textContent = message;
+
+  toast.classList.add('visible');
+
+  clearTimeout(
+    toastMessage.timer
+  );
+
+  toastMessage.timer =
+    setTimeout(() => {
+      toast.classList.remove(
+        'visible'
+      );
+    }, 2600);
+}
+
+function renderRoomList() {
+  const rooms = getRooms()
+    .filter(room => {
+      if (!roomFilter) return true;
+
+      const name =
+        getRoomName(room)
+          .toLowerCase();
+
+      return name.includes(
+        roomFilter.toLowerCase()
+      );
+    })
+    .sort((a, b) => {
+      const aEvents =
+        getRoomEvents(a);
+
+      const bEvents =
+        getRoomEvents(b);
+
+      const aLast =
+        aEvents.at(-1)
+          ?.getTs?.() || 0;
+
+      const bLast =
+        bEvents.at(-1)
+          ?.getTs?.() || 0;
+
+      return bLast - aLast;
+    });
+
+  roomCount.textContent =
+    rooms.length;
 
   roomList.innerHTML = '';
 
-  if (!filtered.length) {
+  if (!rooms.length) {
     roomList.innerHTML = `
       <div class="room-empty">
-        <span>No conversations</span>
+        <i class="hgi-stroke hgi-search-01"></i>
+        <span>No conversations found.</span>
       </div>
     `;
 
     return;
   }
 
-  for (const room of filtered) {
-    const element = document.createElement('button');
+  for (const room of rooms) {
+    const item =
+      document.createElement('button');
 
-    element.type = 'button';
-    element.className = 'room-item';
+    item.type = 'button';
+    item.className =
+      'room-item';
 
-    if (room.roomId === selectedRoomId) {
-      element.classList.add('active');
+    if (
+      room.roomId ===
+      activeRoomId
+    ) {
+      item.classList.add(
+        'active'
+      );
     }
 
-    const avatar = getAvatarUrl(room);
+    const name =
+      getRoomName(room);
+
+    const events =
+      getRoomEvents(room);
+
+    const last =
+      events.at(-1);
+
     const unread =
-      room.getUnreadNotificationCount?.() || 0;
+      room.getUnreadNotificationCount?.(
+        'total'
+      ) || 0;
 
-    const encrypted =
-      Matrix.isRoomEncrypted(room);
+    const avatarUrl =
+      room.getAvatarUrl?.(
+        getHomeserver(),
+        84,
+        84,
+        'crop'
+      );
 
-    element.innerHTML = `
-      <span class="room-avatar">
+    item.innerHTML = `
+      <div class="room-avatar">
         ${
-          avatar
-            ? `<img src="${escapeHtml(avatar)}" alt="">`
-            : `<span>${escapeHtml(
-                roomName(room).slice(0, 1).toUpperCase()
-              )}</span>`
+          avatarUrl
+            ? `<img src="${escapeHtml(avatarUrl)}" alt="">`
+            : escapeHtml(initials(name))
         }
-      </span>
+      </div>
 
-      <span class="room-copy">
+      <div class="room-copy">
         <strong>
-          ${escapeHtml(roomName(room))}
+          ${escapeHtml(name)}
         </strong>
 
         <span>
-          ${
-            encrypted
-              ? '🔒 '
-              : ''
-          }${escapeHtml(
-            getRoomPreview(room)
-          )}
+          ${escapeHtml(roomPreview(room))}
         </span>
-      </span>
+      </div>
 
-      <span class="room-meta">
+      <div class="room-meta">
         <time>
-          ${getRoomTimestamp(room)
-            ? escapeHtml(
-                formatRelativeDate(
-                  getRoomTimestamp(room)
-                )
-              )
-            : ''}
+          ${
+            formatRoomTime(
+              last?.getTs?.()
+            )
+          }
         </time>
 
         ${
@@ -439,120 +411,156 @@ function renderRooms() {
             ? `<b>${unread > 99 ? '99+' : unread}</b>`
             : ''
         }
-      </span>
+      </div>
     `;
 
-    element.addEventListener(
+    item.addEventListener(
       'click',
       () => selectRoom(room.roomId)
     );
 
-    roomList.appendChild(element);
+    roomList.appendChild(item);
   }
 }
 
 async function selectRoom(roomId) {
-  const room = Matrix.getRoom(roomId);
-
-  if (!room) {
-    return;
-  }
-
-  selectedRoomId = roomId;
-  lastReadEventId = null;
-
-  roomCache.set(roomId, room);
-
-  emptyState.classList.add('hidden');
-  chatView.classList.remove('hidden');
-
-  renderRooms();
-  renderHeader();
-  renderMessages();
-
-  await Matrix.markRoomRead(roomId)
-    .catch(() => {});
-
-  requestAnimationFrame(() => {
-    messageList.scrollTop =
-      messageList.scrollHeight;
-  });
-
-  renderRooms();
-}
-
-function renderHeader() {
   const room =
-    Matrix.getRoom(selectedRoomId);
+    getClient()?.getRoom(roomId);
 
-  if (!room) {
-    return;
-  }
+  if (!room) return;
 
-  chatName.textContent =
-    roomName(room);
+  activeRoomId =
+    roomId;
 
-  const encrypted =
-    Matrix.isRoomEncrypted(room);
+  emptyState.classList.add(
+    'hidden'
+  );
 
-  const memberCount =
-    room.getJoinedMembers?.().length ||
-    room.getMembers?.().length ||
-    0;
+  chatView.classList.remove(
+    'hidden'
+  );
 
-  chatStatus.textContent =
-    encrypted
-      ? `🔒 End-to-end encrypted · ${memberCount} members`
-      : `${memberCount} members`;
-
-  const avatar = getAvatarUrl(room);
-
-  if (avatar) {
-    chatAvatar.src = avatar;
-    chatAvatar.hidden = false;
-    chatAvatarFallback.hidden = true;
-  } else {
-    chatAvatar.hidden = true;
-    chatAvatarFallback.hidden = false;
-    chatAvatarFallback.textContent =
-      roomName(room).slice(0, 1).toUpperCase();
-  }
-}
-
-/* ------------------------------------------------------------------
-   MESSAGES
------------------------------------------------------------------- */
-
-function renderMessages() {
-  messageList.innerHTML = '';
-
-  const room =
-    Matrix.getRoom(selectedRoomId);
-
-  if (!room) {
-    return;
-  }
+  renderRoomList();
+  renderHeader(room);
+  renderMessages(room);
 
   const events =
-    Matrix.getTimeline(
-      selectedRoomId,
-      200
+    getRoomEvents(room);
+
+  const last =
+    events.at(-1);
+
+  if (last) {
+    await markRead(last);
+  }
+
+  if (
+    window.innerWidth < 900
+  ) {
+    document.body.classList.add(
+      'room-open'
+    );
+  }
+
+  messageInput.focus();
+}
+
+function renderHeader(room) {
+  const name =
+    getRoomName(room);
+
+  chatName.textContent =
+    name;
+
+  const members =
+    room.getJoinedMembers?.() ||
+    room.getMembers?.() ||
+    [];
+
+  chatStatus.textContent =
+    `${members.length || 1} ${
+      members.length === 1
+        ? 'member'
+        : 'members'
+    }`;
+
+  const avatar =
+    room.getAvatarUrl?.(
+      getHomeserver(),
+      96,
+      96,
+      'crop'
     );
 
-  let previousDay = '';
+  if (avatar) {
+    chatAvatar.src =
+      avatar;
 
-  for (const event of events) {
-    if (!Matrix.isMessageEvent(event)) {
-      continue;
-    }
+    chatAvatar.hidden =
+      false;
 
+    chatAvatarFallback.hidden =
+      true;
+  } else {
+    chatAvatar.hidden =
+      true;
+
+    chatAvatarFallback.hidden =
+      false;
+
+    chatAvatarFallback.innerHTML =
+      `<span>${escapeHtml(initials(name))}</span>`;
+  }
+}
+
+function renderMessages(room) {
+  const events =
+    getRoomEvents(room);
+
+  messageList.innerHTML = '';
+
+  if (!events.length) {
+    messageList.innerHTML = `
+      <div class="messages-empty">
+        <div class="messages-empty-mark">
+          <i class="hgi-stroke hgi-message-01"></i>
+        </div>
+
+        <strong>
+          This is the beginning.
+        </strong>
+
+        <span>
+          Send the first message.
+        </span>
+      </div>
+    `;
+
+    return;
+  }
+
+  const visible =
+    events.filter(event => {
+      const type =
+        event.getType();
+
+      return (
+        type === 'm.room.message' ||
+        type === 'm.room.encrypted'
+      );
+    });
+
+  let lastDate = '';
+
+  for (const event of visible) {
     const timestamp =
-      Matrix.getTimestamp(event);
+      event.getTs?.() || Date.now();
 
-    const day =
-      new Date(timestamp).toDateString();
+    const date =
+      new Date(timestamp)
+        .toDateString();
 
-    if (day !== previousDay) {
+    if (date !== lastDate) {
       const divider =
         document.createElement('div');
 
@@ -560,698 +568,426 @@ function renderMessages() {
         'date-divider';
 
       divider.innerHTML = `
-        <span>${escapeHtml(
-          formatDay(timestamp)
-        )}</span>
+        <span>
+          ${escapeHtml(
+            new Intl.DateTimeFormat(
+              undefined,
+              {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+              }
+            ).format(timestamp)
+          )}
+        </span>
       `;
 
-      messageList.appendChild(divider);
+      messageList.appendChild(
+        divider
+      );
 
-      previousDay = day;
+      lastDate = date;
     }
 
-    renderMessage(
-      room,
-      event
-    );
+    const node =
+      renderMessage(
+        event,
+        room
+      );
+
+    if (node) {
+      messageList.appendChild(
+        node
+      );
+    }
   }
 
-  if (!messageList.children.length) {
-    const empty =
-      document.createElement('div');
-
-    empty.className =
-      'messages-empty';
-
-    empty.innerHTML = `
-      <div>◌</div>
-      <p>No messages yet.</p>
-      <span>Start the conversation.</span>
-    `;
-
-    messageList.appendChild(empty);
-  }
+  requestAnimationFrame(() => {
+    messageList.scrollTop =
+      messageList.scrollHeight;
+  });
 }
 
-function renderMessage(
-  room,
-  event
-) {
+function renderMessage(event, room) {
+  const type =
+    event.getType();
+
   const content =
-    Matrix.getMessageContent(event);
+    event.getContent();
 
   const sender =
-    Matrix.getSender(event);
+    event.getSender();
 
   const own =
-    Matrix.isOwnEvent(event);
+    sender === getUserId();
 
-  const element =
+  const row =
     document.createElement('article');
 
-  element.className =
-    `message ${own ? 'own' : ''}`;
+  row.className =
+    `message-row ${own ? 'own' : 'other'}`;
 
-  element.dataset.eventId =
-    Matrix.getEventId(event);
-
-  const memberName =
-    getMemberName(
-      room,
-      sender
-    );
-
-  const avatar =
-    room.getMember?.(sender)?.getMxcAvatarUrl?.();
-
-  const relation =
-    content.relatesTo;
-
-  const edited =
-    relation?.rel_type === 'm.replace';
-
-  const isReply =
-    Boolean(
-      relation?.['m.in_reply_to']?.event_id
-    );
-
-  let bodyHtml = '';
+  row.dataset.eventId =
+    event.getId?.() || '';
 
   if (
-    content.msgtype === 'm.image' &&
+    type === 'm.room.encrypted'
+  ) {
+    row.innerHTML = `
+      <div class="message-bubble encrypted">
+        <div class="encrypted-icon">
+          <i class="hgi-stroke hgi-lock"></i>
+        </div>
+
+        <div>
+          <strong>Encrypted message</strong>
+          <span>
+            ${
+              isCryptoReady()
+                ? 'Decrypting with your device…'
+                : 'Encryption unavailable in this session.'
+            }
+          </span>
+        </div>
+      </div>
+    `;
+
+    return row;
+  }
+
+  const body =
+    content.body || '';
+
+  const msgType =
+    content.msgtype;
+
+  const senderName =
+    own
+      ? 'You'
+      : getMemberName(
+          room,
+          sender
+        );
+
+  const avatar =
+    own
+      ? ''
+      : initials(senderName);
+
+  let contentHtml = '';
+
+  if (
+    msgType === 'm.image' &&
     content.url
   ) {
     const image =
-      Matrix.mxcToHttp(
+      mediaUrl(
         content.url,
-        {
-          width: 1200,
-          height: 1200,
-          method: 'scale'
-        }
+        640,
+        640
       );
 
-    bodyHtml = `
-      <figure class="message-image">
+    contentHtml = `
+      <a
+        class="message-image"
+        href="${escapeHtml(image || content.url)}"
+        target="_blank"
+        rel="noopener"
+      >
         <img
-          src="${escapeHtml(image)}"
-          alt="${escapeHtml(content.body)}"
+          src="${escapeHtml(image || content.url)}"
+          alt="${escapeHtml(body)}"
           loading="lazy"
         >
+      </a>
 
-        ${
-          content.body
-            ? `<figcaption>${escapeHtml(
-                content.body
-              )}</figcaption>`
-            : ''
-        }
-      </figure>
+      ${
+        body
+          ? `<p>${linkify(body)}</p>`
+          : ''
+      }
     `;
   } else if (
-    content.msgtype === 'm.file' &&
+    msgType === 'm.file' &&
     content.url
   ) {
     const fileUrl =
-      Matrix.mxcToHttp(
+      mediaUrl(
         content.url
-      );
+      ) || content.url;
 
-    bodyHtml = `
+    contentHtml = `
       <a
-        class="file-message"
+        class="file-card"
         href="${escapeHtml(fileUrl)}"
         target="_blank"
         rel="noopener"
       >
-        <span>📎</span>
+        <i class="hgi-stroke hgi-file-02"></i>
+
         <span>
           <strong>
-            ${escapeHtml(
-              content.filename ||
-              content.body ||
-              'File'
-            )}
+            ${escapeHtml(body || 'File')}
           </strong>
-          <small>Open attachment</small>
+
+          <small>
+            Open attachment
+          </small>
         </span>
       </a>
     `;
   } else {
-    const text =
-      content.newContent?.body ||
-      content.body ||
-      'Unable to display message.';
-
-    bodyHtml = `
-      <div class="message-body">
-        ${linkify(text)}
-      </div>
+    contentHtml = `
+      <p>
+        ${linkify(body)}
+      </p>
     `;
   }
 
-  const replyEventId =
-    relation?.['m.in_reply_to']?.event_id;
-
-  let replyHtml = '';
-
-  if (replyEventId) {
-    const replied =
-      Matrix.getEvent(
-        selectedRoomId,
-        replyEventId
-      );
-
-    if (replied) {
-      const repliedContent =
-        Matrix.getMessageContent(
-          replied
-        );
-
-      replyHtml = `
-        <button
-          type="button"
-          class="reply-reference"
-          data-jump-to="${escapeHtml(
-            replyEventId
-          )}"
-        >
-          <strong>
-            ${escapeHtml(
-              getMemberName(
-                room,
-                Matrix.getSender(
-                  replied
-                )
-              )
-            )}
-          </strong>
-
-          <span>
-            ${escapeHtml(
-              repliedContent.body ||
-              'Message'
-            )}
-          </span>
-        </button>
-      `;
-    }
-  }
-
-  element.innerHTML = `
+  row.innerHTML = `
     ${
-      !own
-        ? `<div class="message-avatar">
-            ${
-              avatar
-                ? `<img
-                    src="${escapeHtml(
-                      Matrix.mxcToHttp(
-                        avatar,
-                        {
-                          width: 64,
-                          height: 64,
-                          method: 'crop'
-                        }
-                      )
-                    )}"
-                    alt=""
-                  >`
-                : escapeHtml(
-                    memberName
-                      .slice(0, 1)
-                      .toUpperCase()
-                  )
-            }
-          </div>`
-        : ''
+      own
+        ? ''
+        : `
+          <div class="message-avatar">
+            ${escapeHtml(avatar)}
+          </div>
+        `
     }
 
     <div class="message-column">
 
       ${
-        !own
-          ? `<span class="message-sender">
-              ${escapeHtml(memberName)}
-            </span>`
-          : ''
+        own
+          ? ''
+          : `
+            <span class="message-author">
+              ${escapeHtml(senderName)}
+            </span>
+          `
       }
 
-      ${replyHtml}
-
       <div class="message-bubble">
-        ${bodyHtml}
 
-        <footer class="message-meta">
+        ${contentHtml}
+
+        <div class="message-meta">
           <time>
-            ${escapeHtml(
-              formatTime(timestamp)
-            )}
+            ${formatTime(event.getTs?.())}
           </time>
 
           ${
-            edited
-              ? '<span>edited</span>'
-              : ''
-          }
-
-          ${
             own
-              ? '<span class="message-check">✓</span>'
+              ? `
+                <i
+                  class="hgi-stroke hgi-checkmark-02"
+                  aria-label="Sent"
+                ></i>
+              `
               : ''
           }
-        </footer>
+        </div>
+
       </div>
 
-      <div class="message-actions">
-        <button
-          type="button"
-          data-action="reply"
-        >↩</button>
-
-        <button
-          type="button"
-          data-action="react"
-        >☺</button>
-
-        ${
-          own
-            ? `<button
-                type="button"
-                data-action="edit"
-              >✎</button>`
-            : ''
-        }
-
-        ${
-          own
-            ? `<button
-                type="button"
-                data-action="delete"
-              >×</button>`
-            : ''
-        }
-      </div>
     </div>
   `;
 
-  messageList.appendChild(element);
-
-  element
-    .querySelectorAll(
-      '[data-action]'
-    )
-    .forEach((button) => {
-      button.addEventListener(
-        'click',
-        () =>
-          handleMessageAction(
-            button.dataset.action,
-            event
-          )
-      );
-    });
-
-  element
-    .querySelectorAll(
-      '[data-jump-to]'
-    )
-    .forEach((button) => {
-      button.addEventListener(
-        'click',
-        () => jumpToEvent(
-          button.dataset.jumpTo
-        )
-      );
-    });
+  return row;
 }
 
-async function handleMessageAction(
-  action,
-  event
-) {
-  if (!selectedRoomId) {
-    return;
-  }
+function updateTyping() {
+  if (!activeRoomId) return;
 
-  if (action === 'reply') {
-    setReply(event);
-    return;
-  }
-
-  if (action === 'react') {
-    await Matrix.sendReaction(
-      selectedRoomId,
-      Matrix.getEventId(event),
-      '❤️'
-    );
-
-    return;
-  }
-
-  if (action === 'edit') {
-    const current =
-      Matrix.getMessageContent(event)
-        .body || '';
-
-    const next =
-      prompt(
-        'Edit message',
-        current
-      );
-
-    if (
-      next !== null &&
-      next.trim() &&
-      next.trim() !== current
-    ) {
-      await Matrix.editMessage(
-        selectedRoomId,
-        event,
-        next.trim()
-      );
-    }
-
-    return;
-  }
-
-  if (action === 'delete') {
-    const confirmed =
-      confirm(
-        'Delete this message?'
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await Matrix.redactMessage(
-      selectedRoomId,
-      Matrix.getEventId(event)
-    );
-  }
-}
-
-function jumpToEvent(eventId) {
-  const target =
-    messageList.querySelector(
-      `[data-event-id="${CSS.escape(eventId)}"]`
-    );
-
-  target?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'center'
-  });
-}
-
-/* ------------------------------------------------------------------
-   REPLY
------------------------------------------------------------------- */
-
-function setReply(event) {
-  replyEvent = event;
-
-  const room =
-    Matrix.getRoom(selectedRoomId);
-
-  const content =
-    Matrix.getMessageContent(event);
-
-  replyAuthor.textContent =
-    getMemberName(
-      room,
-      Matrix.getSender(event)
-    );
-
-  replyBody.textContent =
-    content.body ||
-    'Message';
-
-  replyPreview.classList.remove(
-    'hidden'
+  clearTimeout(
+    typingTimer
   );
 
-  messageInput.focus();
+  typingTimer =
+    setTimeout(() => {
+      sendTyping(
+        activeRoomId,
+        false
+      ).catch(() => {});
+    }, 1200);
 }
 
-function clearReply() {
-  replyEvent = null;
-  replyPreview.classList.add('hidden');
-  replyAuthor.textContent = '';
-  replyBody.textContent = '';
-}
+async function submitMessage() {
+  if (
+    isSending ||
+    !activeRoomId
+  ) {
+    return;
+  }
 
-cancelReply.addEventListener(
-  'click',
-  clearReply
-);
-
-/* ------------------------------------------------------------------
-   SENDING
------------------------------------------------------------------- */
-
-async function sendCurrentMessage() {
   const text =
     messageInput.value.trim();
 
-  if (!selectedRoomId || !text) {
-    return;
-  }
+  if (!text) return;
 
-  sendButton.disabled = true;
+  isSending = true;
+
+  sendButton.disabled =
+    true;
 
   try {
-    await Matrix.sendText(
-      selectedRoomId,
-      text,
-      {
-        replyTo: replyEvent
-      }
+    await sendText(
+      activeRoomId,
+      text
     );
 
     messageInput.value = '';
 
-    clearReply();
-
     resizeComposer();
 
-    await Matrix.markRoomRead(
-      selectedRoomId
-    );
-  } catch (error) {
-    console.error(error);
+    sendTyping(
+      activeRoomId,
+      false
+    ).catch(() => {});
 
-    alert(
+    const room =
+      getClient()?.getRoom(
+        activeRoomId
+      );
+
+    if (room) {
+      renderMessages(room);
+    }
+  } catch (error) {
+    toastMessage(
       error?.message ||
       'Message could not be sent.'
     );
   } finally {
+    isSending = false;
     sendButton.disabled = false;
     messageInput.focus();
   }
 }
 
-composer.addEventListener(
-  'submit',
-  (event) => {
-    event.preventDefault();
-    sendCurrentMessage();
-  }
-);
-
-messageInput.addEventListener(
-  'keydown',
-  (event) => {
-    if (
-      event.key === 'Enter' &&
-      !event.shiftKey &&
-      !event.isComposing
-    ) {
-      event.preventDefault();
-      sendCurrentMessage();
-    }
-  }
-);
-
 function resizeComposer() {
-  messageInput.style.height = 'auto';
+  messageInput.style.height =
+    'auto';
 
   messageInput.style.height =
     `${Math.min(
       messageInput.scrollHeight,
-      180
+      160
     )}px`;
 }
 
-messageInput.addEventListener(
-  'input',
-  () => {
-    resizeComposer();
+function renderEmojiPicker() {
+  emojiGrid.innerHTML = '';
 
-    if (!selectedRoomId) {
-      return;
-    }
+  const items =
+    emojiSearch.value.trim()
+      ? searchEmoji(
+          emojiSearch.value,
+          ''
+        )
+      : (
+          currentEmojiGroup
+            ? searchEmoji(
+                '',
+                currentEmojiGroup
+              )
+            : getRecentEmoji()
+        );
 
-    Matrix.setTyping(
-      selectedRoomId,
-      true,
-      5000
-    ).catch(() => {});
+  if (!items.length) {
+    emojiGrid.innerHTML = `
+      <div class="emoji-empty">
+        No emoji found.
+      </div>
+    `;
 
-    clearTimeout(typingTimer);
-
-    typingTimer = setTimeout(() => {
-      Matrix.setTyping(
-        selectedRoomId,
-        false
-      ).catch(() => {});
-    }, 2500);
+    return;
   }
-);
 
-/* ------------------------------------------------------------------
-   MEDIA
------------------------------------------------------------------- */
+  const fragment =
+    document.createDocumentFragment();
 
-attachButton.addEventListener(
-  'click',
-  () => fileInput.click()
-);
+  for (const item of items) {
+    const button =
+      document.createElement('button');
 
-fileInput.addEventListener(
-  'change',
-  async () => {
-    const files = [...fileInput.files];
+    button.type = 'button';
+    button.className =
+      'emoji-item';
 
-    if (!selectedRoomId || !files.length) {
-      return;
-    }
+    button.title =
+      item.name;
 
-    for (const file of files) {
-      try {
-        if (
-          file.type.startsWith('image/')
-        ) {
-          await Matrix.sendImage(
-            selectedRoomId,
-            file
-          );
-        } else {
-          const upload =
-            await Matrix.uploadFile(
-              file,
-              {
-                encrypt:
-                  Matrix.isRoomEncrypted(
-                    Matrix.getRoom(
-                      selectedRoomId
-                    )
-                  )
-              }
-            );
+    button.textContent =
+      item.emoji;
 
-          await Matrix.getClient()
-            .sendMessage(
-              selectedRoomId,
-              {
-                msgtype: 'm.file',
-                body:
-                  file.name ||
-                  'File',
-                url:
-                  upload.content_uri ||
-                  upload.contentUri,
-                filename:
-                  file.name ||
-                  'File',
-                info: {
-                  mimetype:
-                    file.type ||
-                    'application/octet-stream',
-                  size: file.size
-                }
-              }
-            );
-        }
-      } catch (error) {
-        console.error(error);
+    button.addEventListener(
+      'click',
+      () => {
+        insertEmoji(
+          item.emoji
+        );
 
-        alert(
-          error?.message ||
-          `Could not upload ${file.name}.`
+        rememberEmoji(
+          item.emoji
         );
       }
-    }
+    );
 
-    fileInput.value = '';
+    fragment.appendChild(
+      button
+    );
   }
-);
 
-/* ------------------------------------------------------------------
-   EMOJI
------------------------------------------------------------------- */
-
-let activeEmojiCategory = '';
-
-async function initializeEmoji() {
-  await initUnicode();
-
-  const metadata = getMetadata();
-
-  console.info(
-    `[Orbit] Unicode emoji loaded: ${metadata.emojiCount}`
+  emojiGrid.appendChild(
+    fragment
   );
-
-  renderEmojiCategories();
-
-  activeEmojiCategory =
-    getCategories()[0] ||
-    '';
-
-  renderEmojiGrid();
 }
 
 function renderEmojiCategories() {
   emojiCategories.innerHTML = '';
 
-  const recentButton =
-    document.createElement('button');
+  const groups = [
+    '',
+    ...getGroups()
+  ];
 
-  recentButton.type = 'button';
-  recentButton.textContent = '◷';
-  recentButton.title = 'Recently used';
-
-  recentButton.addEventListener(
-    'click',
-    () => {
-      activeEmojiCategory = '__recent__';
-      renderEmojiGrid();
-    }
-  );
-
-  emojiCategories.appendChild(
-    recentButton
-  );
-
-  for (const category of getCategories()) {
+  for (const group of groups) {
     const button =
       document.createElement('button');
 
     button.type = 'button';
-    button.textContent =
-      categoryIcon(category);
 
-    button.title = category;
+    button.className =
+      'emoji-category';
+
+    if (
+      group === currentEmojiGroup
+    ) {
+      button.classList.add(
+        'active'
+      );
+    }
+
+    button.title =
+      group || 'Recent';
+
+    button.textContent =
+      group
+        ? getGroupIcon(group)
+        : '◷';
 
     button.addEventListener(
       'click',
       () => {
-        activeEmojiCategory =
-          category;
+        currentEmojiGroup =
+          group;
 
-        emojiSearch.value = '';
+        emojiSearch.value =
+          '';
 
-        renderEmojiGrid();
+        renderEmojiCategories();
+        renderEmojiPicker();
       }
     );
 
@@ -1261,78 +997,373 @@ function renderEmojiCategories() {
   }
 }
 
-function categoryIcon(category) {
-  const icons = {
-    'Smileys & Emotion': '☺',
-    'People & Body': '◉',
-    'Animals & Nature': '♧',
-    'Food & Drink': '♨',
-    'Travel & Places': '⌂',
-    'Activities': '⚽',
-    Objects: '▣',
-    Symbols: '♢',
-    Flags: '⚑'
-  };
+function insertEmoji(emoji) {
+  const start =
+    messageInput.selectionStart;
 
-  return icons[category] || '•';
+  const end =
+    messageInput.selectionEnd;
+
+  const value =
+    messageInput.value;
+
+  messageInput.value =
+    `${value.slice(0, start)}${emoji}${value.slice(end)}`;
+
+  const cursor =
+    start + emoji.length;
+
+  messageInput.selectionStart =
+    cursor;
+
+  messageInput.selectionEnd =
+    cursor;
+
+  messageInput.focus();
+
+  resizeComposer();
 }
 
-function renderEmojiGrid() {
-  const query =
-    emojiSearch.value.trim();
-
-  let items;
-
-  if (query) {
-    items = searchEmoji(
-      query,
-      120
+function toggleEmojiPicker() {
+  const hidden =
+    emojiPicker.classList.contains(
+      'hidden'
     );
-  } else if (
-    activeEmojiCategory === '__recent__'
-  ) {
-    items = getRecentEmoji();
-  } else {
-    items = getCategoryEmoji(
-      activeEmojiCategory
-    );
+
+  emojiPicker.classList.toggle(
+    'hidden',
+    !hidden
+  );
+
+  emojiButton.setAttribute(
+    'aria-expanded',
+    String(hidden)
+  );
+
+  if (hidden) {
+    renderEmojiCategories();
+    renderEmojiPicker();
   }
+}
 
-  emojiGrid.innerHTML = '';
+async function openDM() {
+  dmError.textContent = '';
+  dmUser.value = '';
+  dmResults.innerHTML = '';
 
-  if (!items.length) {
-    emojiGrid.innerHTML = `
-      <div class="emoji-empty">
-        No emoji found
-      </div>
-    `;
+  dmModal.showModal();
+
+  setTimeout(() => {
+    dmUser.focus();
+  }, 50);
+}
+
+async function handleDMSubmit() {
+  const user =
+    dmUser.value.trim();
+
+  if (!user) {
+    dmError.textContent =
+      'Enter a Matrix ID.';
 
     return;
   }
 
-  for (const item of items) {
-    const button =
-      document.createElement('button');
+  const startButton =
+    $('#start-dm');
 
-    button.type = 'button';
-    button.className = 'emoji-item';
-    button.textContent = item.emoji;
-    button.title = item.name;
-    button.setAttribute(
-      'aria-label',
-      item.name
+  startButton.disabled =
+    true;
+
+  dmError.textContent = '';
+
+  try {
+    const roomId =
+      await createDirectMessage(
+        user
+      );
+
+    dmModal.close();
+
+    await selectRoom(roomId);
+
+    toastMessage(
+      'Conversation created.'
+    );
+  } catch (error) {
+    dmError.textContent =
+      error?.message ||
+      'Could not create conversation.';
+  } finally {
+    startButton.disabled =
+      false;
+  }
+}
+
+function openProfile() {
+  profileError.textContent = '';
+
+  const userId =
+    getUserId();
+
+  profileUserId.textContent =
+    userId;
+
+  profileName.value =
+    getDisplayName();
+
+  profileAvatar.textContent =
+    initials(
+      getDisplayName()
     );
 
-    button.addEventListener(
+  profileLargeAvatar.textContent =
+    initials(
+      getDisplayName()
+    );
+
+  profileModal.showModal();
+}
+
+async function saveProfile() {
+  const name =
+    profileName.value.trim();
+
+  if (!name) {
+    profileError.textContent =
+      'Enter a display name.';
+
+    return;
+  }
+
+  try {
+    await setDisplayName(name);
+
+    sidebarUser.textContent =
+      name;
+
+    profileAvatar.textContent =
+      initials(name);
+
+    profileLargeAvatar.textContent =
+      initials(name);
+
+    profileModal.close();
+
+    toastMessage(
+      'Profile updated.'
+    );
+  } catch (error) {
+    profileError.textContent =
+      error?.message ||
+      'Could not update profile.';
+  }
+}
+
+function bindEvents() {
+  $('#theme-toggle')
+    ?.addEventListener(
       'click',
       () => {
-        useEmoji(item.emoji);
+        const current =
+          document.documentElement
+            .dataset.theme;
 
-        insertAtCursor(
-          messageInput,
-          item.emoji
+        applyTheme(
+          current === 'dark'
+            ? 'light'
+            : 'dark'
         );
+      }
+    );
 
+  roomSearch.addEventListener(
+    'input',
+    event => {
+      roomFilter =
+        event.target.value;
+
+      renderRoomList();
+    }
+  );
+
+  $('#new-dm-btn')
+    .addEventListener(
+      'click',
+      openDM
+    );
+
+  $('#cancel-dm')
+    .addEventListener(
+      'click',
+      () => dmModal.close()
+    );
+
+  $('#close-dm')
+    .addEventListener(
+      'click',
+      () => dmModal.close()
+    );
+
+  dmForm.addEventListener(
+    'submit',
+    event => {
+      event.preventDefault();
+      handleDMSubmit();
+    }
+  );
+
+  $('#profile-btn')
+    .addEventListener(
+      'click',
+      openProfile
+    );
+
+  $('#close-profile')
+    .addEventListener(
+      'click',
+      () => profileModal.close()
+    );
+
+  profileForm.addEventListener(
+    'submit',
+    event => {
+      event.preventDefault();
+      saveProfile();
+    }
+  );
+
+  $('#logout-btn')
+    .addEventListener(
+      'click',
+      async () => {
+        await logout();
+
+        window.location.replace(
+          './index.html'
+        );
+      }
+    );
+
+  $('#back-btn')
+    .addEventListener(
+      'click',
+      () => {
+        document.body.classList.remove(
+          'room-open'
+        );
+      }
+    );
+
+  composer.addEventListener(
+    'submit',
+    event => {
+      event.preventDefault();
+      submitMessage();
+    }
+  );
+
+  messageInput.addEventListener(
+    'input',
+    () => {
+      resizeComposer();
+
+      if (activeRoomId) {
+        sendTyping(
+          activeRoomId,
+          true
+        ).catch(() => {});
+
+        updateTyping();
+      }
+    }
+  );
+
+  messageInput.addEventListener(
+    'keydown',
+    event => {
+      if (
+        event.key === 'Enter' &&
+        !event.shiftKey &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+        submitMessage();
+      }
+    }
+  );
+
+  emojiButton.addEventListener(
+    'click',
+    toggleEmojiPicker
+  );
+
+  emojiSearch.addEventListener(
+    'input',
+    renderEmojiPicker
+  );
+
+  emojiTone.addEventListener(
+    'click',
+    () => {
+      emojiToneIndex =
+        (emojiToneIndex + 1) % 6;
+
+      emojiTone.textContent =
+        emojiToneIndex === 0
+          ? '●'
+          : [
+              '🏻',
+              '🏼',
+              '🏽',
+              '🏾',
+              '🏿'
+            ][emojiToneIndex - 1];
+    }
+  );
+
+  attachButton.addEventListener(
+    'click',
+    () => fileInput.click()
+  );
+
+  fileInput.addEventListener(
+    'change',
+    async () => {
+      if (!activeRoomId) return;
+
+      const files =
+        [...fileInput.files];
+
+      for (const file of files) {
+        try {
+          await sendFile(
+            activeRoomId,
+            file
+          );
+        } catch (error) {
+          toastMessage(
+            error?.message ||
+            'Attachment failed.'
+          );
+        }
+      }
+
+      fileInput.value = '';
+    }
+  );
+
+  document.addEventListener(
+    'click',
+    event => {
+      if (
+        !emojiPicker.contains(
+          event.target
+        ) &&
+        !emojiButton.contains(
+          event.target
+        )
+      ) {
         emojiPicker.classList.add(
           'hidden'
         );
@@ -1342,430 +1373,166 @@ function renderEmojiGrid() {
           'false'
         );
       }
-    );
+    }
+  );
 
-    emojiGrid.appendChild(button);
-  }
+  document.addEventListener(
+    'keydown',
+    event => {
+      if (
+        event.key === '/' &&
+        document.activeElement !==
+          messageInput &&
+        document.activeElement !==
+          roomSearch
+      ) {
+        event.preventDefault();
+        roomSearch.focus();
+      }
+
+      if (
+        event.key.toLowerCase() === 'n' &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        document.activeElement.tagName !==
+          'INPUT' &&
+        document.activeElement.tagName !==
+          'TEXTAREA'
+      ) {
+        openDM();
+      }
+
+      if (
+        event.key === 'Escape'
+      ) {
+        emojiPicker.classList.add(
+          'hidden'
+        );
+      }
+    }
+  );
 }
 
-emojiButton.addEventListener(
-  'click',
-  () => {
-    const hidden =
-      emojiPicker.classList.toggle(
-        'hidden'
+function handleMatrixEvent(data) {
+  if (
+    data.type === 'sync'
+  ) {
+    if (
+      data.state === 'PREPARED' ||
+      data.state === 'SYNCING'
+    ) {
+      setConnection(
+        'connected',
+        'Connected'
       );
-
-    emojiButton.setAttribute(
-      'aria-expanded',
-      String(!hidden)
-    );
-
-    if (!hidden) {
-      renderEmojiGrid();
-      emojiSearch.focus();
-    }
-  }
-);
-
-emojiSearch.addEventListener(
-  'input',
-  debounce(
-    renderEmojiGrid,
-    100
-  )
-);
-
-/* ------------------------------------------------------------------
-   TYPING
------------------------------------------------------------------- */
-
-Matrix.subscribe(
-  'typing',
-  () => {
-    if (!selectedRoomId) {
-      return;
     }
 
-    renderTyping();
-  }
-);
-
-function renderTyping() {
-  const room =
-    Matrix.getRoom(selectedRoomId);
-
-  if (!room) {
-    typingIndicator.textContent = '';
-    return;
-  }
-
-  const members =
-    room.getMembers?.() || [];
-
-  const typing = members.filter(
-    (member) =>
-      member.typing &&
-      member.userId !== Matrix.getUserId()
-  );
-
-  if (!typing.length) {
-    typingIndicator.textContent = '';
-    return;
-  }
-
-  if (typing.length === 1) {
-    typingIndicator.textContent =
-      `${typing[0].name || typing[0].userId} is typing…`;
-
-    return;
-  }
-
-  typingIndicator.textContent =
-    `${typing.length} people are typing…`;
-}
-
-/* ------------------------------------------------------------------
-   LIVE EVENTS
------------------------------------------------------------------- */
-
-Matrix.subscribe(
-  'timeline',
-  () => {
-    renderRooms();
-
-    if (selectedRoomId) {
-      renderHeader();
-      renderMessages();
-    }
-  }
-);
-
-Matrix.subscribe(
-  'room',
-  () => {
-    renderRooms();
-  }
-);
-
-Matrix.subscribe(
-  'membership',
-  () => {
-    renderRooms();
-    renderHeader();
-  }
-);
-
-Matrix.subscribe(
-  'decrypted',
-  () => {
-    renderMessages();
-  }
-);
-
-Matrix.subscribe(
-  'redaction',
-  () => {
-    renderMessages();
-  }
-);
-
-/* ------------------------------------------------------------------
-   ROOM SEARCH
------------------------------------------------------------------- */
-
-roomSearch.addEventListener(
-  'input',
-  debounce(() => {
-    roomFilter =
-      roomSearch.value.trim();
-
-    renderRooms();
-  }, 120)
-);
-
-/* ------------------------------------------------------------------
-   NEW DM
------------------------------------------------------------------- */
-
-$('#new-dm-btn').addEventListener(
-  'click',
-  () => {
-    dmError.textContent = '';
-    dmUser.value = '';
-    dmResults.innerHTML = '';
-
-    dmModal.showModal();
-    dmUser.focus();
-  }
-);
-
-$('#close-dm').addEventListener(
-  'click',
-  () => dmModal.close()
-);
-
-$('#cancel-dm').addEventListener(
-  'click',
-  () => dmModal.close()
-);
-
-const searchDirectory =
-  debounce(
-    async () => {
-      const value =
-        dmUser.value.trim();
-
-      dmResults.innerHTML = '';
-
-      if (!value) {
-        return;
-      }
-
-      try {
-        const users =
-          await Matrix.searchUsers(
-            value
-          );
-
-        for (const user of users) {
-          const button =
-            document.createElement('button');
-
-          button.type = 'button';
-          button.className =
-            'directory-result';
-
-          button.innerHTML = `
-            <strong>
-              ${escapeHtml(
-                user.display_name ||
-                user.user_id
-              )}
-            </strong>
-
-            <span>
-              ${escapeHtml(
-                user.user_id
-              )}
-            </span>
-          `;
-
-          button.addEventListener(
-            'click',
-            () => {
-              dmUser.value =
-                user.user_id;
-
-              dmResults.innerHTML = '';
-            }
-          );
-
-          dmResults.appendChild(
-            button
-          );
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    350
-  );
-
-dmUser.addEventListener(
-  'input',
-  searchDirectory
-);
-
-dmForm.addEventListener(
-  'submit',
-  async (event) => {
-    event.preventDefault();
-
-    dmError.textContent = '';
-
-    const userId =
-      dmUser.value.trim();
-
-    if (!userId.startsWith('@')) {
-      dmError.textContent =
-        'Enter a valid Matrix user ID.';
-
-      return;
+    if (
+      data.state === 'ERROR'
+    ) {
+      setConnection(
+        'error',
+        'Connection error'
+      );
     }
 
-    const submit =
-      $('#start-dm');
+    renderRoomList();
 
-    submit.disabled = true;
-    submit.textContent = 'Creating…';
-
-    try {
-      const roomId =
-        await Matrix.createDM(
-          userId
+    if (activeRoomId) {
+      const room =
+        getClient()?.getRoom(
+          activeRoomId
         );
 
-      dmModal.close();
-
-      await new Promise(
-        (resolve) =>
-          setTimeout(resolve, 250)
-      );
-
-      renderRooms();
-
-      await selectRoom(roomId);
-    } catch (error) {
-      dmError.textContent =
-        error?.message ||
-        'Could not create conversation.';
-    } finally {
-      submit.disabled = false;
-      submit.textContent = 'Start';
+      if (room) {
+        renderMessages(room);
+      }
     }
   }
-);
 
-/* ------------------------------------------------------------------
-   PROFILE
------------------------------------------------------------------- */
+  if (
+    data.type === 'timeline' ||
+    data.type === 'room-updated' ||
+    data.type === 'unread'
+  ) {
+    renderRoomList();
 
-$('#profile-btn').addEventListener(
-  'click',
-  async () => {
-    profileError.textContent = '';
-
-    try {
-      const profile =
-        await Matrix.getProfile();
-
-      profileName.value =
-        profile.displayname ||
-        Matrix.getUserId();
-
-      profileModal.showModal();
-      profileName.focus();
-    } catch (error) {
-      profileError.textContent =
-        error?.message ||
-        'Could not load profile.';
-    }
-  }
-);
-
-$('#close-profile').addEventListener(
-  'click',
-  () => profileModal.close()
-);
-
-profileForm.addEventListener(
-  'submit',
-  async (event) => {
-    event.preventDefault();
-
-    profileError.textContent = '';
-
-    try {
-      await Matrix.setDisplayName(
-        profileName.value.trim()
-      );
-
-      sidebarUser.textContent =
-        profileName.value.trim() ||
-        Matrix.getUserId();
-
-      profileModal.close();
-    } catch (error) {
-      profileError.textContent =
-        error?.message ||
-        'Could not update profile.';
-    }
-  }
-);
-
-$('#logout-btn').addEventListener(
-  'click',
-  async () => {
-    const confirmed =
-      confirm(
-        'Sign out of Orbit on this device?'
-      );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      await Matrix.logout();
-    } finally {
-      window.location.replace(
-        './index.html'
+    if (
+      activeRoomId &&
+      data.room?.roomId ===
+        activeRoomId
+    ) {
+      renderMessages(
+        data.room
       );
     }
   }
-);
 
-/* ------------------------------------------------------------------
-   MOBILE
------------------------------------------------------------------- */
+  if (
+    data.type === 'membership'
+  ) {
+    renderRoomList();
+  }
+}
 
-$('#back-btn').addEventListener(
-  'click',
-  () => {
-    document.body.classList.remove(
-      'mobile-chat-open'
+async function boot() {
+  applyTheme(
+    initialTheme()
+  );
+
+  sidebarUser.textContent =
+    getDisplayName();
+
+  profileAvatar.textContent =
+    initials(
+      getDisplayName()
     );
-  }
-);
 
-/* ------------------------------------------------------------------
-   INIT
------------------------------------------------------------------- */
+  profileLargeAvatar.textContent =
+    initials(
+      getDisplayName()
+    );
 
-async function init() {
-  applyTheme();
+  profileUserId.textContent =
+    getUserId();
+
+  bindEvents();
+
+  onMatrixEvent(
+    handleMatrixEvent
+  );
 
   try {
-    const session =
-      Matrix.getSession();
-
-    sidebarUser.textContent =
-      session.userId;
-
-    setConnectionStatus(
-      'Initializing',
-      'warning'
+    setConnection(
+      'warning',
+      'Starting'
     );
 
-    await Matrix.start();
+    await initializeMatrix();
 
-    renderRooms();
+    await loadEmoji();
 
-    await initializeEmoji();
+    await start();
 
-    setConnectionStatus(
-      'Connected',
-      'connected'
+    setConnection(
+      'connected',
+      'Connected'
     );
+
+    renderEmojiCategories();
+    renderEmojiPicker();
+    renderRoomList();
   } catch (error) {
-    console.error(
-      '[Orbit] initialization failed',
-      error
+    console.error(error);
+
+    setConnection(
+      'error',
+      'Offline'
     );
 
-    setConnectionStatus(
-      'Unavailable',
-      'error'
-    );
-
-    alert(
+    toastMessage(
       error?.message ||
-      'Orbit could not connect to Matrix.'
-    );
-
-    window.location.replace(
-      './index.html'
+      'Orbit could not start.'
     );
   }
 }
@@ -1773,8 +1540,8 @@ async function init() {
 window.addEventListener(
   'beforeunload',
   () => {
-    Matrix.stop().catch(() => {});
+    stop();
   }
 );
 
-init();
+boot();

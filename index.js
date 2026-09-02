@@ -1,36 +1,43 @@
 const SESSION_KEY = 'orbit.session';
-const HOMESERVER_KEY = 'orbit-homeserver';
+const HOMESERVER_KEY = 'orbit.homeserver';
 const THEME_KEY = 'orbit-theme';
 
-const $ = (selector) => document.querySelector(selector);
+const form = document.querySelector('#login-form');
+const homeserverSelect = document.querySelector('#homeserver-select');
+const customHomeserverField = document.querySelector('#custom-homeserver-field');
+const customHomeserverInput = document.querySelector('#homeserver-custom');
 
-const form = $('#login-form');
-const homeserverSelect = $('#homeserver-select');
-const customHomeserverField = $('#custom-homeserver-field');
-const customHomeserver = $('#homeserver-custom');
-const usernameInput = $('#login-user');
-const passwordInput = $('#login-password');
-const rememberHomeserver = $('#remember-homeserver');
-const loginButton = $('#login-button');
-const loginError = $('#login-error');
+const userInput = document.querySelector('#login-user');
+const passwordInput = document.querySelector('#login-password');
+
+const rememberHomeserver = document.querySelector('#remember-homeserver');
+const loginButton = document.querySelector('#login-button');
+const loginError = document.querySelector('#login-error');
+
+const themeButton = document.querySelector('#auth-theme-toggle');
 
 function normalizeHomeserver(value) {
   const input = String(value || '').trim();
 
-  if (!input) {
-    return '';
-  }
+  if (!input) return '';
 
   try {
     const url = new URL(
-      input.includes('://') ? input : `https://${input}`
+      input.includes('://')
+        ? input
+        : `https://${input}`
     );
 
     if (!['http:', 'https:'].includes(url.protocol)) {
       return '';
     }
 
-    if (url.username || url.password || url.search || url.hash) {
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
       return '';
     }
 
@@ -44,71 +51,69 @@ function normalizeHomeserver(value) {
 
 function getHomeserver() {
   if (homeserverSelect.value === 'custom') {
-    return normalizeHomeserver(customHomeserver.value);
+    return normalizeHomeserver(customHomeserverInput.value);
   }
 
   return normalizeHomeserver(homeserverSelect.value);
 }
 
-function showError(message) {
-  loginError.textContent = message || '';
-}
-
 function setLoading(loading) {
   loginButton.disabled = loading;
-  loginButton.querySelector('span').textContent =
-    loading ? 'Connecting…' : 'Enter Orbit';
+
+  loginButton.innerHTML = loading
+    ? `
+      <span class="button-spinner"></span>
+      Connecting
+    `
+    : `
+      <span>Enter Orbit</span>
+      <i class="hgi-stroke hgi-arrow-up-right-01"></i>
+    `;
 }
 
-function saveSession(session) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+function showError(message = '') {
+  loginError.textContent = message;
 }
 
-function applyTheme() {
-  const theme = localStorage.getItem(THEME_KEY);
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
 
-  if (theme === 'light' || theme === 'dark') {
-    document.documentElement.dataset.theme = theme;
+  localStorage.setItem(THEME_KEY, theme);
+
+  const icon = themeButton?.querySelector('i');
+
+  if (icon) {
+    icon.className =
+      theme === 'dark'
+        ? 'hgi-stroke hgi-sun-03'
+        : 'hgi-stroke hgi-moon-02';
   }
 }
 
-function updateCustomHomeserver() {
-  const visible = homeserverSelect.value === 'custom';
+function getInitialTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
 
-  customHomeserverField.classList.toggle('hidden', !visible);
-  customHomeserver.required = visible;
-
-  if (visible) {
-    customHomeserver.focus();
+  if (saved === 'dark' || saved === 'light') {
+    return saved;
   }
+
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+    ? 'dark'
+    : 'light';
 }
 
-function restoreHomeserver() {
-  const saved = localStorage.getItem(HOMESERVER_KEY);
-
-  if (!saved) {
-    return;
-  }
-
-  const matchingOption = [...homeserverSelect.options]
-    .find((option) => option.value === saved);
-
-  if (matchingOption) {
-    homeserverSelect.value = saved;
-  } else {
-    homeserverSelect.value = 'custom';
-    customHomeserver.value = saved;
-    customHomeserverField.classList.remove('hidden');
-  }
-
-  rememberHomeserver.checked = true;
+function saveSession(data) {
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify(data)
+  );
 }
 
 async function login() {
   showError('');
 
   const homeserver = getHomeserver();
-  const user = usernameInput.value.trim();
+  const user = userInput.value.trim();
   const password = passwordInput.value;
 
   if (!homeserver) {
@@ -117,14 +122,12 @@ async function login() {
   }
 
   if (!user) {
-    showError('Enter your Matrix username.');
-    usernameInput.focus();
+    showError('Enter your Matrix ID.');
     return;
   }
 
   if (!password) {
     showError('Enter your password.');
-    passwordInput.focus();
     return;
   }
 
@@ -144,71 +147,109 @@ async function login() {
             type: 'm.id.user',
             user
           },
-          password,
-          initial_device_display_name: 'Orbit'
+          password
         })
       }
     );
 
-    let data = null;
-
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
+    const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
       throw new Error(
-        data?.error ||
-        `Login failed (${response.status}).`
+        data.error ||
+        data.errcode ||
+        `Login failed (${response.status})`
       );
     }
 
-    if (
-      !data?.access_token ||
-      !data?.user_id ||
-      !data?.device_id
-    ) {
-      throw new Error('The homeserver returned an incomplete login response.');
+    if (!data.access_token || !data.user_id) {
+      throw new Error(
+        'The homeserver returned an incomplete login response.'
+      );
     }
 
     const session = {
       homeserver,
-      accessToken: data.access_token,
       userId: data.user_id,
-      deviceId: data.device_id,
+      accessToken: data.access_token,
+      deviceId: data.device_id || null,
       expiresInMs: data.expires_in_ms || null,
-      refreshToken: data.refresh_token || null,
       createdAt: Date.now()
     };
 
     saveSession(session);
 
     if (rememberHomeserver.checked) {
-      localStorage.setItem(HOMESERVER_KEY, homeserver);
+      localStorage.setItem(
+        HOMESERVER_KEY,
+        homeserver
+      );
     } else {
       localStorage.removeItem(HOMESERVER_KEY);
     }
 
     window.location.replace('./chat.html');
   } catch (error) {
-    showError(error?.message || 'Unable to sign in.');
-  } finally {
+    showError(
+      error?.message ||
+      'Unable to connect to this homeserver.'
+    );
+
     setLoading(false);
   }
 }
 
-homeserverSelect.addEventListener(
-  'change',
-  updateCustomHomeserver
-);
+homeserverSelect.addEventListener('change', () => {
+  const custom =
+    homeserverSelect.value === 'custom';
 
-form.addEventListener('submit', (event) => {
+  customHomeserverField.classList.toggle(
+    'hidden',
+    !custom
+  );
+
+  if (custom) {
+    customHomeserverInput.focus();
+  }
+});
+
+form.addEventListener('submit', event => {
   event.preventDefault();
   login();
 });
 
-applyTheme();
-restoreHomeserver();
-updateCustomHomeserver();
+themeButton?.addEventListener('click', () => {
+  const current =
+    document.documentElement.dataset.theme;
+
+  applyTheme(
+    current === 'dark'
+      ? 'light'
+      : 'dark'
+  );
+});
+
+const rememberedHomeserver =
+  localStorage.getItem(HOMESERVER_KEY);
+
+if (rememberedHomeserver) {
+  const known =
+    [...homeserverSelect.options]
+      .find(option =>
+        option.value === rememberedHomeserver
+      );
+
+  if (known) {
+    homeserverSelect.value =
+      rememberedHomeserver;
+  } else {
+    homeserverSelect.value = 'custom';
+    customHomeserverField.classList.remove('hidden');
+    customHomeserverInput.value =
+      rememberedHomeserver;
+  }
+
+  rememberHomeserver.checked = true;
+}
+
+applyTheme(getInitialTheme());

@@ -2,53 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+
   <meta
     name="viewport"
     content="width=device-width, initial-scale=1, viewport-fit=cover"
   >
-  <meta name="theme-color" content="#0b0b0b">
-  <meta name="description" content="Orbit. A quiet Matrix client.">
+
+  <meta name="theme-color" content="#f5f3ee">
+  <meta
+    name="description"
+    content="Orbit. A quiet Matrix client for private conversations."
+  >
+
+  <link rel="icon" type="image/png" href="./icon.png">
+  <link rel="apple-touch-icon" href="./icon.png">
 
   <title>Orbit</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
   <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Satoshi:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
     rel="stylesheet"
+  >
+
+  <link
+    href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://cdn.hugeicons.com/font/hgi-stroke-rounded.css"
   >
 
   <link rel="stylesheet" href="./root.css">
 </head>
 
 <body class="auth-page">
+
+  <div class="auth-noise"></div>
+
   <main class="auth-shell">
+
+    <header class="auth-topbar">
+      <div class="mini-brand">
+        <img src="./icon.png" alt="Orbit">
+        <span>Orbit</span>
+      </div>
+
+      <button
+        id="auth-theme-toggle"
+        class="icon-button subtle"
+        type="button"
+        aria-label="Toggle theme"
+        title="Toggle theme"
+      >
+        <i class="hgi-stroke hgi-moon-02"></i>
+      </button>
+    </header>
+
     <section class="auth-card" aria-labelledby="orbit-title">
 
-      <div class="brand-lockup">
-        <span class="brand-mark" aria-hidden="true">◌</span>
+      <div class="auth-intro">
+
+        <div class="auth-mark">
+          <img src="./icon.png" alt="">
+        </div>
 
         <div>
           <p class="eyebrow">THE ACE BASE</p>
-          <h1 id="orbit-title">Orbit</h1>
+          <h1 id="orbit-title">Orbit<span>.</span></h1>
         </div>
+
       </div>
 
-      <p class="auth-description">
-        A quiet Matrix client for messages, rooms and encrypted conversations.
-      </p>
+      <div class="auth-copy">
+        <p class="auth-kicker">A quieter way to talk.</p>
+
+        <p class="auth-description">
+          A minimal Matrix client for private conversations,
+          rooms and end-to-end encrypted messaging.
+        </p>
+      </div>
 
       <form id="login-form" novalidate>
+
+        <div class="form-section-label">
+          <span>Connection</span>
+          <span>01</span>
+        </div>
+
         <label class="field">
           <span>Homeserver</span>
 
-          <select id="homeserver-select">
-            <option value="https://matrix.org">matrix.org</option>
-            <option value="https://matrix-client.matrix.org">
-              matrix-client.matrix.org
-            </option>
-            <option value="custom">Custom homeserver</option>
-          </select>
+          <div class="input-shell select-shell">
+            <i class="hgi-stroke hgi-globe-02"></i>
+
+            <select id="homeserver-select">
+              <option value="https://matrix.org">
+                matrix.org
+              </option>
+
+              <option value="https://matrix-client.matrix.org">
+                matrix-client.matrix.org
+              </option>
+
+              <option value="custom">
+                Custom homeserver
+              </option>
+            </select>
+
+            <i class="hgi-stroke hgi-arrow-down-01"></i>
+          </div>
         </label>
 
         <label
@@ -57,44 +124,69 @@
         >
           <span>Custom homeserver</span>
 
-          <input
-            id="homeserver-custom"
-            type="url"
-            inputmode="url"
-            autocomplete="url"
-            placeholder="https://matrix.example.org"
-          >
+          <div class="input-shell">
+            <i class="hgi-stroke hgi-link-01"></i>
+
+            <input
+              id="homeserver-custom"
+              type="url"
+              inputmode="url"
+              autocomplete="url"
+              placeholder="https://matrix.example.org"
+            >
+          </div>
         </label>
+
+        <div class="form-section-label account-label">
+          <span>Account</span>
+          <span>02</span>
+        </div>
 
         <label class="field">
           <span>Username</span>
 
-          <input
-            id="login-user"
-            type="text"
-            autocomplete="username"
-            autocapitalize="none"
-            spellcheck="false"
-            placeholder="@you:example.org"
-            required
-          >
+          <div class="input-shell">
+            <i class="hgi-stroke hgi-user"></i>
+
+            <input
+              id="login-user"
+              type="text"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              placeholder="@you:example.org"
+              required
+            >
+          </div>
         </label>
 
         <label class="field">
           <span>Password</span>
 
-          <input
-            id="login-password"
-            type="password"
-            autocomplete="current-password"
-            placeholder="Password"
-            required
-          >
+          <div class="input-shell">
+            <i class="hgi-stroke hgi-lock-key"></i>
+
+            <input
+              id="login-password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Your password"
+              required
+            >
+          </div>
         </label>
 
         <label class="check-row">
-          <input id="remember-homeserver" type="checkbox">
-          <span>Remember homeserver</span>
+          <input
+            id="remember-homeserver"
+            type="checkbox"
+          >
+
+          <span class="check-box">
+            <i class="hgi-stroke hgi-checkmark-02"></i>
+          </span>
+
+          <span>Remember this homeserver</span>
         </label>
 
         <p
@@ -106,19 +198,36 @@
 
         <button
           id="login-button"
-          class="primary-button"
+          class="primary-button auth-submit"
           type="submit"
         >
           <span>Enter Orbit</span>
+          <i class="hgi-stroke hgi-arrow-up-right-01"></i>
         </button>
+
       </form>
 
       <footer class="auth-footer">
-        <span>Matrix</span>
-        <span>·</span>
-        <span>End-to-end encrypted</span>
+        <span>
+          <i class="hgi-stroke hgi-shield-01"></i>
+          Matrix protocol
+        </span>
+
+        <span>•</span>
+
+        <span>
+          <i class="hgi-stroke hgi-lock"></i>
+          E2EE ready
+        </span>
       </footer>
+
     </section>
+
+    <footer class="page-signature">
+      <span>ORBIT / 02</span>
+      <span>THE ACE BASE</span>
+    </footer>
+
   </main>
 
   <script type="module" src="./index.js"></script>

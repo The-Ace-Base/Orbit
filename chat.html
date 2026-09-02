@@ -8,7 +8,14 @@
     content="width=device-width, initial-scale=1, viewport-fit=cover"
   >
 
-  <meta name="theme-color" content="#0b0b0b">
+  <meta name="theme-color" content="#f5f3ee">
+  <meta
+    name="description"
+    content="Orbit. A quiet Matrix client."
+  >
+
+  <link rel="icon" type="image/png" href="./icon.png">
+  <link rel="apple-touch-icon" href="./icon.png">
 
   <title>Orbit</title>
 
@@ -16,8 +23,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
   <link
-    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Satoshi:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
     rel="stylesheet"
+  >
+
+  <link
+    href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link
+    rel="stylesheet"
+    href="https://cdn.hugeicons.com/font/hgi-stroke-rounded.css"
   >
 
   <link rel="stylesheet" href="./root.css">
@@ -30,20 +47,18 @@
     <aside
       id="sidebar"
       class="sidebar"
-      aria-label="Rooms"
+      aria-label="Conversations"
     >
+
       <header class="sidebar-header">
 
-        <div class="brand-lockup compact">
-          <span class="brand-mark">◌</span>
-
-          <div>
-            <p class="eyebrow">ORBIT</p>
-            <strong id="sidebar-user">Matrix</strong>
-          </div>
+        <div class="mini-brand">
+          <img src="./icon.png" alt="Orbit">
+          <span>Orbit</span>
         </div>
 
         <div class="header-actions">
+
           <button
             id="theme-toggle"
             class="icon-button"
@@ -51,7 +66,7 @@
             aria-label="Toggle theme"
             title="Toggle theme"
           >
-            ◐
+            <i class="hgi-stroke hgi-moon-02"></i>
           </button>
 
           <button
@@ -62,21 +77,31 @@
           >
             <span id="profile-avatar">?</span>
           </button>
+
         </div>
       </header>
+
+      <div class="sidebar-user">
+        <p class="eyebrow">SIGNED IN AS</p>
+        <strong id="sidebar-user">Matrix</strong>
+      </div>
 
       <div class="sidebar-tools">
 
         <label class="search-box">
-          <span aria-hidden="true">⌕</span>
+
+          <i class="hgi-stroke hgi-search-01"></i>
 
           <input
             id="room-search"
             type="search"
-            placeholder="Search rooms"
+            placeholder="Search conversations"
             autocomplete="off"
             spellcheck="false"
           >
+
+          <kbd>/</kbd>
+
         </label>
 
         <button
@@ -84,9 +109,16 @@
           class="new-button"
           type="button"
         >
-          <span>＋</span>
+          <i class="hgi-stroke hgi-message-add-01"></i>
           <span>New conversation</span>
+          <span class="new-shortcut">N</span>
         </button>
+
+      </div>
+
+      <div class="section-heading">
+        <span>Conversations</span>
+        <span id="room-count">0</span>
       </div>
 
       <div
@@ -96,9 +128,16 @@
       ></div>
 
       <footer class="sidebar-footer">
-        <span id="connection-status">Connecting</span>
-        <span class="status-dot" aria-hidden="true"></span>
+        <span
+          id="connection-status"
+          data-state="warning"
+        >
+          Connecting
+        </span>
+
+        <span class="status-dot"></span>
       </footer>
+
     </aside>
 
     <main class="chat-main">
@@ -109,16 +148,16 @@
           id="back-btn"
           class="icon-button mobile-only"
           type="button"
-          aria-label="Back to rooms"
+          aria-label="Back"
         >
-          ‹
+          <i class="hgi-stroke hgi-arrow-left-02"></i>
         </button>
 
         <button
           id="chat-avatar-button"
           class="chat-avatar-button"
           type="button"
-          aria-label="Room information"
+          aria-label="Conversation information"
         >
           <img
             id="chat-avatar"
@@ -126,12 +165,21 @@
             hidden
           >
 
-          <span id="chat-avatar-fallback">◌</span>
+          <span id="chat-avatar-fallback">
+            <i class="hgi-stroke hgi-user-group"></i>
+          </span>
         </button>
 
         <div class="chat-heading">
-          <strong id="chat-name">Orbit</strong>
-          <span id="chat-status">Select a conversation</span>
+
+          <strong id="chat-name">
+            Orbit
+          </strong>
+
+          <span id="chat-status">
+            Select a conversation
+          </span>
+
         </div>
 
         <div class="chat-actions">
@@ -142,7 +190,7 @@
             type="button"
             aria-label="Search conversation"
           >
-            ⌕
+            <i class="hgi-stroke hgi-search-01"></i>
           </button>
 
           <button
@@ -151,8 +199,9 @@
             type="button"
             aria-label="Conversation menu"
           >
-            ···
+            <i class="hgi-stroke hgi-more-horizontal"></i>
           </button>
+
         </div>
       </header>
 
@@ -160,13 +209,35 @@
         id="empty-state"
         class="empty-state"
       >
-        <div class="empty-orbit">◌</div>
 
-        <h1>Orbit</h1>
+        <div class="empty-orbit">
+          <img src="./icon.png" alt="">
+        </div>
+
+        <p class="eyebrow">ORBIT / MATRIX</p>
+
+        <h1>
+          Conversation,<br>
+          without the noise.
+        </h1>
 
         <p>
-          Select a conversation and start moving.
+          Choose a room from the left or start
+          a new conversation.
         </p>
+
+        <div class="empty-hints">
+          <span>
+            <i class="hgi-stroke hgi-lock"></i>
+            End-to-end encryption
+          </span>
+
+          <span>
+            <i class="hgi-stroke hgi-command"></i>
+            Matrix protocol
+          </span>
+        </div>
+
       </section>
 
       <section
@@ -192,7 +263,8 @@
           id="reply-preview"
           class="reply-preview hidden"
         >
-          <div>
+
+          <div class="reply-copy">
             <span>Replying to</span>
             <strong id="reply-author"></strong>
             <p id="reply-body"></p>
@@ -200,18 +272,20 @@
 
           <button
             id="cancel-reply"
-            type="button"
             class="icon-button"
+            type="button"
             aria-label="Cancel reply"
           >
-            ×
+            <i class="hgi-stroke hgi-cancel-01"></i>
           </button>
+
         </div>
 
         <form
           id="composer"
           class="composer"
         >
+
           <div class="composer-shell">
 
             <button
@@ -221,7 +295,7 @@
               aria-label="Emoji"
               aria-expanded="false"
             >
-              ☺
+              <i class="hgi-stroke hgi-smile"></i>
             </button>
 
             <input
@@ -237,14 +311,14 @@
               type="button"
               aria-label="Attach file"
             >
-              ＋
+              <i class="hgi-stroke hgi-attachment-01"></i>
             </button>
 
             <textarea
               id="message-input"
               rows="1"
               maxlength="65536"
-              placeholder="Write a message…"
+              placeholder="Write something…"
               autocomplete="off"
               spellcheck="true"
             ></textarea>
@@ -255,8 +329,9 @@
               type="submit"
               aria-label="Send message"
             >
-              ↑
+              <i class="hgi-stroke hgi-arrow-up-02"></i>
             </button>
+
           </div>
 
           <div
@@ -264,13 +339,31 @@
             class="emoji-picker hidden"
             aria-label="Emoji picker"
           >
-            <div class="emoji-search-row">
-              <input
-                id="emoji-search"
-                type="search"
-                placeholder="Search emoji"
-                autocomplete="off"
+
+            <div class="emoji-picker-top">
+
+              <div class="emoji-search">
+
+                <i class="hgi-stroke hgi-search-01"></i>
+
+                <input
+                  id="emoji-search"
+                  type="search"
+                  placeholder="Search emoji"
+                  autocomplete="off"
+                >
+
+              </div>
+
+              <button
+                id="emoji-tone"
+                class="tone-button"
+                type="button"
+                title="Skin tone"
               >
+                ●
+              </button>
+
             </div>
 
             <nav
@@ -283,22 +376,30 @@
               id="emoji-grid"
               class="emoji-grid"
             ></div>
+
           </div>
+
         </form>
+
       </section>
+
     </main>
+
   </div>
 
   <dialog id="dm-modal" class="modal">
+
     <form
       id="dm-form"
       class="modal-card"
       method="dialog"
     >
+
       <header class="modal-header">
+
         <div>
-          <p class="eyebrow">NEW</p>
-          <h2>Conversation</h2>
+          <p class="eyebrow">NEW / 01</p>
+          <h2>Start a conversation</h2>
         </div>
 
         <button
@@ -306,21 +407,30 @@
           type="button"
           class="icon-button"
         >
-          ×
+          <i class="hgi-stroke hgi-cancel-01"></i>
         </button>
+
       </header>
 
       <label class="field">
+
         <span>Matrix ID</span>
 
-        <input
-          id="dm-user"
-          type="text"
-          placeholder="@user:example.org"
-          autocomplete="off"
-          autocapitalize="none"
-          spellcheck="false"
-        >
+        <div class="input-shell">
+
+          <i class="hgi-stroke hgi-user"></i>
+
+          <input
+            id="dm-user"
+            type="text"
+            placeholder="@user:example.org"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+
+        </div>
+
       </label>
 
       <div
@@ -335,6 +445,7 @@
       ></p>
 
       <div class="modal-actions">
+
         <button
           id="cancel-dm"
           type="button"
@@ -349,21 +460,28 @@
           type="submit"
         >
           Start
+          <i class="hgi-stroke hgi-arrow-up-right-01"></i>
         </button>
+
       </div>
+
     </form>
+
   </dialog>
 
   <dialog id="profile-modal" class="modal">
+
     <form
       id="profile-form"
       class="modal-card"
       method="dialog"
     >
+
       <header class="modal-header">
+
         <div>
-          <p class="eyebrow">ACCOUNT</p>
-          <h2>Profile</h2>
+          <p class="eyebrow">ACCOUNT / 02</p>
+          <h2>Your profile</h2>
         </div>
 
         <button
@@ -371,19 +489,39 @@
           type="button"
           class="icon-button"
         >
-          ×
+          <i class="hgi-stroke hgi-cancel-01"></i>
         </button>
+
       </header>
 
+      <div class="profile-hero">
+        <div id="profile-large-avatar">
+          ?
+        </div>
+
+        <div>
+          <strong id="profile-user-id"></strong>
+          <span>Matrix account</span>
+        </div>
+      </div>
+
       <label class="field">
+
         <span>Display name</span>
 
-        <input
-          id="profile-name"
-          type="text"
-          maxlength="255"
-          autocomplete="name"
-        >
+        <div class="input-shell">
+
+          <i class="hgi-stroke hgi-edit-02"></i>
+
+          <input
+            id="profile-name"
+            type="text"
+            maxlength="255"
+            autocomplete="name"
+          >
+
+        </div>
+
       </label>
 
       <p
@@ -393,11 +531,13 @@
       ></p>
 
       <div class="modal-actions">
+
         <button
           id="logout-btn"
           type="button"
           class="danger-button"
         >
+          <i class="hgi-stroke hgi-logout-01"></i>
           Sign out
         </button>
 
@@ -406,10 +546,21 @@
           type="submit"
         >
           Save
+          <i class="hgi-stroke hgi-checkmark-02"></i>
         </button>
+
       </div>
+
     </form>
+
   </dialog>
+
+  <div
+    id="toast"
+    class="toast"
+    role="status"
+    aria-live="polite"
+  ></div>
 
   <script type="module" src="./chat.js"></script>
 </body>
