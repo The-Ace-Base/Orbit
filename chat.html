@@ -1,83 +1,416 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f7f7f7" />
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta name="theme-color" content="#0b0b0b">
+
   <title>Orbit</title>
-  <link rel="stylesheet" href="./root.css" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Satoshi:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="./root.css">
 </head>
-<body>
-  <main id="app">
-    <section id="main-view">
-      <aside id="sidebar">
-        <header class="sidebar-header">
-          <button id="profile-btn" class="icon-btn" type="button" aria-label="Profile">
-            <img id="profile-avatar" class="avatar" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:none" />
-          </button>
-          <div class="sidebar-title"><strong>Orbit</strong></div>
-          <button id="new-dm-btn" class="icon-btn" type="button" aria-label="New direct message">+</button>
-          <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode">◐</button>
-        </header>
-        <div class="search-wrap">
-          <input id="room-search" type="search" placeholder="Search" autocomplete="off" spellcheck="false" />
-        </div>
-        <nav>
-          <ul id="room-list" class="room-list" role="list"></ul>
-        </nav>
-      </aside>
 
-      <section id="chat-panel">
-        <div id="empty-state" class="empty-state">
-          <p>Select a conversation</p>
-        </div>
+<body class="chat-page">
 
-        <section id="chat-view" class="hidden">
-          <header class="chat-header">
-            <button id="back-btn" class="icon-btn mobile-only" type="button" aria-label="Back">←</button>
-            <img id="chat-avatar" class="avatar" alt="" />
-            <div class="room-meta">
-              <h2 id="chat-name">Conversation</h2>
-              <span id="chat-status" class="muted"></span>
-            </div>
-            <button id="chat-menu" class="icon-btn" type="button" aria-label="Conversation menu">⋯</button>
-          </header>
+  <div class="app-shell">
 
-          <div id="message-list" class="message-list" aria-live="polite"></div>
-          <div id="typing-indicator" class="typing hidden"></div>
+    <aside
+      id="sidebar"
+      class="sidebar"
+      aria-label="Rooms"
+    >
+      <header class="sidebar-header">
 
-          <form id="composer" class="composer">
-            <button id="emoji-btn" class="icon-btn" type="button" aria-label="Emoji picker">🙂</button>
-            <input id="message-input" type="text" placeholder="Message" autocomplete="off" maxlength="10000" />
-            <button class="btn primary" type="submit" aria-label="Send message">Send</button>
-          </form>
-        </section>
-      </section>
-    </section>
+        <div class="brand-lockup compact">
+          <span class="brand-mark">◌</span>
 
-    <!-- DM Modal -->
-    <div id="dm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-      <div class="modal">
-        <header class="modal-header">
-          <h3>New conversation</h3>
-          <button id="close-dm" class="icon-btn" type="button" aria-label="Close">×</button>
-        </header>
-        <div class="modal-body">
-          <label>
-            <span>Username or Matrix ID</span>
-            <input id="dm-user" type="text" placeholder="@username:example.org" autocomplete="off" spellcheck="false" />
-          </label>
-          <div id="dm-results" style="max-height:150px; overflow-y:auto; margin:.5rem 0;"></div>
-          <p id="dm-error" class="error hidden"></p>
-          <div class="actions">
-            <button id="cancel-dm" class="btn" type="button">Cancel</button>
-            <button id="start-dm" class="btn primary" type="button">Start chat</button>
+          <div>
+            <p class="eyebrow">ORBIT</p>
+            <strong id="sidebar-user">Matrix</strong>
           </div>
         </div>
-      </div>
-    </div>
-  </main>
 
-  <script src="./chat.js" defer></script>
+        <div class="header-actions">
+          <button
+            id="theme-toggle"
+            class="icon-button"
+            type="button"
+            aria-label="Toggle theme"
+            title="Toggle theme"
+          >
+            ◐
+          </button>
+
+          <button
+            id="profile-btn"
+            class="avatar-button"
+            type="button"
+            aria-label="Profile"
+          >
+            <span id="profile-avatar">?</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="sidebar-tools">
+
+        <label class="search-box">
+          <span aria-hidden="true">⌕</span>
+
+          <input
+            id="room-search"
+            type="search"
+            placeholder="Search rooms"
+            autocomplete="off"
+            spellcheck="false"
+          >
+        </label>
+
+        <button
+          id="new-dm-btn"
+          class="new-button"
+          type="button"
+        >
+          <span>＋</span>
+          <span>New conversation</span>
+        </button>
+      </div>
+
+      <div
+        id="room-list"
+        class="room-list"
+        role="list"
+      ></div>
+
+      <footer class="sidebar-footer">
+        <span id="connection-status">Connecting</span>
+        <span class="status-dot" aria-hidden="true"></span>
+      </footer>
+    </aside>
+
+    <main class="chat-main">
+
+      <header class="chat-header">
+
+        <button
+          id="back-btn"
+          class="icon-button mobile-only"
+          type="button"
+          aria-label="Back to rooms"
+        >
+          ‹
+        </button>
+
+        <button
+          id="chat-avatar-button"
+          class="chat-avatar-button"
+          type="button"
+          aria-label="Room information"
+        >
+          <img
+            id="chat-avatar"
+            alt=""
+            hidden
+          >
+
+          <span id="chat-avatar-fallback">◌</span>
+        </button>
+
+        <div class="chat-heading">
+          <strong id="chat-name">Orbit</strong>
+          <span id="chat-status">Select a conversation</span>
+        </div>
+
+        <div class="chat-actions">
+
+          <button
+            id="search-chat-btn"
+            class="icon-button"
+            type="button"
+            aria-label="Search conversation"
+          >
+            ⌕
+          </button>
+
+          <button
+            id="chat-menu"
+            class="icon-button"
+            type="button"
+            aria-label="Conversation menu"
+          >
+            ···
+          </button>
+        </div>
+      </header>
+
+      <section
+        id="empty-state"
+        class="empty-state"
+      >
+        <div class="empty-orbit">◌</div>
+
+        <h1>Orbit</h1>
+
+        <p>
+          Select a conversation and start moving.
+        </p>
+      </section>
+
+      <section
+        id="chat-view"
+        class="chat-view hidden"
+      >
+
+        <div
+          id="message-list"
+          class="message-list"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+        ></div>
+
+        <div
+          id="typing-indicator"
+          class="typing-indicator"
+          aria-live="polite"
+        ></div>
+
+        <div
+          id="reply-preview"
+          class="reply-preview hidden"
+        >
+          <div>
+            <span>Replying to</span>
+            <strong id="reply-author"></strong>
+            <p id="reply-body"></p>
+          </div>
+
+          <button
+            id="cancel-reply"
+            type="button"
+            class="icon-button"
+            aria-label="Cancel reply"
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          id="composer"
+          class="composer"
+        >
+          <div class="composer-shell">
+
+            <button
+              id="emoji-button"
+              class="composer-button"
+              type="button"
+              aria-label="Emoji"
+              aria-expanded="false"
+            >
+              ☺
+            </button>
+
+            <input
+              id="file-input"
+              type="file"
+              hidden
+              multiple
+            >
+
+            <button
+              id="attach-button"
+              class="composer-button"
+              type="button"
+              aria-label="Attach file"
+            >
+              ＋
+            </button>
+
+            <textarea
+              id="message-input"
+              rows="1"
+              maxlength="65536"
+              placeholder="Write a message…"
+              autocomplete="off"
+              spellcheck="true"
+            ></textarea>
+
+            <button
+              id="send-button"
+              class="send-button"
+              type="submit"
+              aria-label="Send message"
+            >
+              ↑
+            </button>
+          </div>
+
+          <div
+            id="emoji-picker"
+            class="emoji-picker hidden"
+            aria-label="Emoji picker"
+          >
+            <div class="emoji-search-row">
+              <input
+                id="emoji-search"
+                type="search"
+                placeholder="Search emoji"
+                autocomplete="off"
+              >
+            </div>
+
+            <nav
+              id="emoji-categories"
+              class="emoji-categories"
+              aria-label="Emoji categories"
+            ></nav>
+
+            <div
+              id="emoji-grid"
+              class="emoji-grid"
+            ></div>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="dm-modal" class="modal">
+    <form
+      id="dm-form"
+      class="modal-card"
+      method="dialog"
+    >
+      <header class="modal-header">
+        <div>
+          <p class="eyebrow">NEW</p>
+          <h2>Conversation</h2>
+        </div>
+
+        <button
+          id="close-dm"
+          type="button"
+          class="icon-button"
+        >
+          ×
+        </button>
+      </header>
+
+      <label class="field">
+        <span>Matrix ID</span>
+
+        <input
+          id="dm-user"
+          type="text"
+          placeholder="@user:example.org"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+        >
+      </label>
+
+      <div
+        id="dm-results"
+        class="dm-results"
+      ></div>
+
+      <p
+        id="dm-error"
+        class="form-error"
+        role="alert"
+      ></p>
+
+      <div class="modal-actions">
+        <button
+          id="cancel-dm"
+          type="button"
+          class="secondary-button"
+        >
+          Cancel
+        </button>
+
+        <button
+          id="start-dm"
+          class="primary-button"
+          type="submit"
+        >
+          Start
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="profile-modal" class="modal">
+    <form
+      id="profile-form"
+      class="modal-card"
+      method="dialog"
+    >
+      <header class="modal-header">
+        <div>
+          <p class="eyebrow">ACCOUNT</p>
+          <h2>Profile</h2>
+        </div>
+
+        <button
+          id="close-profile"
+          type="button"
+          class="icon-button"
+        >
+          ×
+        </button>
+      </header>
+
+      <label class="field">
+        <span>Display name</span>
+
+        <input
+          id="profile-name"
+          type="text"
+          maxlength="255"
+          autocomplete="name"
+        >
+      </label>
+
+      <p
+        id="profile-error"
+        class="form-error"
+        role="alert"
+      ></p>
+
+      <div class="modal-actions">
+        <button
+          id="logout-btn"
+          type="button"
+          class="danger-button"
+        >
+          Sign out
+        </button>
+
+        <button
+          class="primary-button"
+          type="submit"
+        >
+          Save
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./chat.js"></script>
 </body>
 </html>

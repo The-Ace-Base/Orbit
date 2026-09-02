@@ -1,54 +1,126 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f7f7f7" />
-  <title>Orbit – Sign in</title>
-  <!-- Satoshi font (fallback to Inter if unavailable) -->
-  <link rel="stylesheet" href="https://fonts.cdnfonts.com/css/satoshi" />
-  <!-- Phosphor icons -->
-  <link rel="stylesheet" href="https://unpkg.com/phosphor-icons@1.4.3/dist/phosphor.css" />
-  <link rel="stylesheet" href="./root.css" />
-</head>
-<body>
-  <main id="app">
-    <section id="login-view" class="login-view">
-      <div class="login-card">
-        <h1>Orbit</h1>
-        <p>Private Matrix messaging.</p>
-        <form id="login-form" autocomplete="on">
-          <label>
-            <span>Homeserver</span>
-            <div style="display:flex;gap:.5rem;align-items:center">
-              <select id="homeserver-select" aria-label="Choose homeserver">
-                <option value="https://matrix.org">matrix.org</option>
-                <option value="https://modular.im">modular.im</option>
-                <option value="https://libera.chat">libera.chat</option>
-                <option value="custom">Custom…</option>
-              </select>
-              <input id="homeserver-custom" type="url" placeholder="https://example.org" style="display:none;flex:1" />
-            </div>
-            <div style="margin-top:.5rem;display:flex;align-items:center;gap:.5rem">
-              <input id="remember-homeserver" type="checkbox" />
-              <label for="remember-homeserver" style="font-size:.85rem">Remember this homeserver</label>
-            </div>
-          </label>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+  <meta name="theme-color" content="#0b0b0b">
+  <meta name="description" content="Orbit. A quiet Matrix client.">
 
-          <label>
-            <span>Matrix ID</span>
-            <input id="login-user" type="text" autocomplete="username" placeholder="@username:matrix.org" required />
-          </label>
-          <label>
-            <span>Password</span>
-            <input id="login-password" type="password" autocomplete="current-password" required />
-          </label>
-          <p id="login-error" class="error hidden"></p>
-          <button id="login-button" class="btn primary" type="submit">Sign in</button>
-        </form>
+  <title>Orbit</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Satoshi:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="./root.css">
+</head>
+
+<body class="auth-page">
+  <main class="auth-shell">
+    <section class="auth-card" aria-labelledby="orbit-title">
+
+      <div class="brand-lockup">
+        <span class="brand-mark" aria-hidden="true">◌</span>
+
+        <div>
+          <p class="eyebrow">THE ACE BASE</p>
+          <h1 id="orbit-title">Orbit</h1>
+        </div>
       </div>
+
+      <p class="auth-description">
+        A quiet Matrix client for messages, rooms and encrypted conversations.
+      </p>
+
+      <form id="login-form" novalidate>
+        <label class="field">
+          <span>Homeserver</span>
+
+          <select id="homeserver-select">
+            <option value="https://matrix.org">matrix.org</option>
+            <option value="https://matrix-client.matrix.org">
+              matrix-client.matrix.org
+            </option>
+            <option value="custom">Custom homeserver</option>
+          </select>
+        </label>
+
+        <label
+          class="field hidden"
+          id="custom-homeserver-field"
+        >
+          <span>Custom homeserver</span>
+
+          <input
+            id="homeserver-custom"
+            type="url"
+            inputmode="url"
+            autocomplete="url"
+            placeholder="https://matrix.example.org"
+          >
+        </label>
+
+        <label class="field">
+          <span>Username</span>
+
+          <input
+            id="login-user"
+            type="text"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            placeholder="@you:example.org"
+            required
+          >
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+
+          <input
+            id="login-password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="Password"
+            required
+          >
+        </label>
+
+        <label class="check-row">
+          <input id="remember-homeserver" type="checkbox">
+          <span>Remember homeserver</span>
+        </label>
+
+        <p
+          id="login-error"
+          class="form-error"
+          role="alert"
+          aria-live="polite"
+        ></p>
+
+        <button
+          id="login-button"
+          class="primary-button"
+          type="submit"
+        >
+          <span>Enter Orbit</span>
+        </button>
+      </form>
+
+      <footer class="auth-footer">
+        <span>Matrix</span>
+        <span>·</span>
+        <span>End-to-end encrypted</span>
+      </footer>
     </section>
   </main>
-  <script src="./index.js" defer></script>
+
+  <script type="module" src="./index.js"></script>
 </body>
 </html>

@@ -1,119 +1,214 @@
-// index.js – login and session management
-
-const loginForm = document.querySelector('#login-form');
-const loginButton = document.querySelector('#login-button');
-const loginError = document.querySelector('#login-error');
-const homeserverInput = document.querySelector('#login-homeserver');
-const userInput = document.querySelector('#login-user');
-const passwordInput = document.querySelector('#login-password');
-
+const SESSION_KEY = 'orbit.session';
+const HOMESERVER_KEY = 'orbit-homeserver';
 const THEME_KEY = 'orbit-theme';
 
-function applyTheme(theme) {
-  if (theme === 'light' || theme === 'dark') {
-    document.documentElement.dataset.theme = theme;
-  } else {
-    document.documentElement.removeAttribute('data-theme');
+const $ = (selector) => document.querySelector(selector);
+
+const form = $('#login-form');
+const homeserverSelect = $('#homeserver-select');
+const customHomeserverField = $('#custom-homeserver-field');
+const customHomeserver = $('#homeserver-custom');
+const usernameInput = $('#login-user');
+const passwordInput = $('#login-password');
+const rememberHomeserver = $('#remember-homeserver');
+const loginButton = $('#login-button');
+const loginError = $('#login-error');
+
+function normalizeHomeserver(value) {
+  const input = String(value || '').trim();
+
+  if (!input) {
+    return '';
+  }
+
+  try {
+    const url = new URL(
+      input.includes('://') ? input : `https://${input}`
+    );
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return '';
+    }
+
+    if (url.username || url.password || url.search || url.hash) {
+      return '';
+    }
+
+    url.pathname = url.pathname.replace(/\/+$/, '');
+
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return '';
   }
 }
-function getInitialTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === 'light' || saved === 'dark') return saved;
-  return 'system';
-}
-applyTheme(getInitialTheme());
 
-// Session storage helpers
-const SESSION_KEY = 'orbit.session';
+function getHomeserver() {
+  if (homeserverSelect.value === 'custom') {
+    return normalizeHomeserver(customHomeserver.value);
+  }
+
+  return normalizeHomeserver(homeserverSelect.value);
+}
+
+function showError(message) {
+  loginError.textContent = message || '';
+}
+
+function setLoading(loading) {
+  loginButton.disabled = loading;
+  loginButton.querySelector('span').textContent =
+    loading ? 'Connecting…' : 'Enter Orbit';
+}
+
 function saveSession(session) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s.homeserver || !s.userId || !s.accessToken) return null;
-    return s;
-  } catch { return null; }
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+
+function applyTheme() {
+  const theme = localStorage.getItem(THEME_KEY);
+
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.dataset.theme = theme;
+  }
 }
 
-function showError(msg) {
-  loginError.textContent = msg;
-  loginError.classList.remove('hidden');
-}
-function clearError() {
-  loginError.textContent = '';
-  loginError.classList.add('hidden');
-}
+function updateCustomHomeserver() {
+  const visible = homeserverSelect.value === 'custom';
 
-// Check for existing session on load
-const existing = loadSession();
-if (existing) {
-  window.location.href = './chat.html';
+  customHomeserverField.classList.toggle('hidden', !visible);
+  customHomeserver.required = visible;
+
+  if (visible) {
+    customHomeserver.focus();
+  }
 }
 
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  clearError();
+function restoreHomeserver() {
+  const saved = localStorage.getItem(HOMESERVER_KEY);
 
-  const homeserver = homeserverInput.value.trim().replace(/\/+$/, '');
-  const userId = userInput.value.trim();
-  const password = passwordInput.value;
-
-  if (!homeserver || !userId || !password) {
-    showError('All fields are required.');
+  if (!saved) {
     return;
   }
 
-  loginButton.disabled = true;
-  loginButton.textContent = 'Signing in…';
+  const matchingOption = [...homeserverSelect.options]
+    .find((option) => option.value === saved);
+
+  if (matchingOption) {
+    homeserverSelect.value = saved;
+  } else {
+    homeserverSelect.value = 'custom';
+    customHomeserver.value = saved;
+    customHomeserverField.classList.remove('hidden');
+  }
+
+  rememberHomeserver.checked = true;
+}
+
+async function login() {
+  showError('');
+
+  const homeserver = getHomeserver();
+  const user = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!homeserver) {
+    showError('Enter a valid homeserver URL.');
+    return;
+  }
+
+  if (!user) {
+    showError('Enter your Matrix username.');
+    usernameInput.focus();
+    return;
+  }
+
+  if (!password) {
+    showError('Enter your password.');
+    passwordInput.focus();
+    return;
+  }
+
+  setLoading(true);
 
   try {
-    // REST login
-    const loginRes = await fetch(`${homeserver}/_matrix/client/v3/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'm.login.password',
-        identifier: { type: 'm.id.user', user: userId },
-        password,
-        initial_device_display_name: 'Orbit Web',
-      }),
-    });
-    const loginData = await loginRes.json();
-    if (!loginRes.ok) {
-      throw new Error(loginData.error || 'Login failed');
+    const response = await fetch(
+      `${homeserver}/_matrix/client/v3/login`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'm.login.password',
+          identifier: {
+            type: 'm.id.user',
+            user
+          },
+          password,
+          initial_device_display_name: 'Orbit'
+        })
+      }
+    );
+
+    let data = null;
+
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+        `Login failed (${response.status}).`
+      );
+    }
+
+    if (
+      !data?.access_token ||
+      !data?.user_id ||
+      !data?.device_id
+    ) {
+      throw new Error('The homeserver returned an incomplete login response.');
     }
 
     const session = {
       homeserver,
-      userId: loginData.user_id,
-      accessToken: loginData.access_token,
-      deviceId: loginData.device_id,
+      accessToken: data.access_token,
+      userId: data.user_id,
+      deviceId: data.device_id,
+      expiresInMs: data.expires_in_ms || null,
+      refreshToken: data.refresh_token || null,
+      createdAt: Date.now()
     };
 
-    // Fetch profile
-    const profileRes = await fetch(
-      `${homeserver}/_matrix/client/v3/profile/${encodeURIComponent(session.userId)}`,
-      { headers: { Authorization: `Bearer ${session.accessToken}` } }
-    );
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      session.displayName = profile.displayname || null;
-      session.avatarUrl = profile.avatar_url || null;
+    saveSession(session);
+
+    if (rememberHomeserver.checked) {
+      localStorage.setItem(HOMESERVER_KEY, homeserver);
+    } else {
+      localStorage.removeItem(HOMESERVER_KEY);
     }
 
-    saveSession(session);
-    window.location.href = './chat.html';
-  } catch (err) {
-    console.error(err);
-    showError(err.message || 'Login failed. Check credentials and server.');
+    window.location.replace('./chat.html');
+  } catch (error) {
+    showError(error?.message || 'Unable to sign in.');
   } finally {
-    loginButton.disabled = false;
-    loginButton.textContent = 'Sign in';
+    setLoading(false);
   }
+}
+
+homeserverSelect.addEventListener(
+  'change',
+  updateCustomHomeserver
+);
+
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
+  login();
 });
+
+applyTheme();
+restoreHomeserver();
+updateCustomHomeserver();
